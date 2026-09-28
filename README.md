@@ -3,6 +3,16 @@
 The public website for [Evora](https://evora.cx): marketing pages, the
 documentation, and the shared UI components they are built from. Next.js.
 
+![The Evora home page](docs/screenshots/home.png)
+
+<table>
+  <tr>
+    <td width="33%"><a href="docs/screenshots/docs.png"><img src="docs/screenshots/docs.png" alt="Documentation"></a><br><sub>Documentation</sub></td>
+    <td width="33%"><a href="docs/screenshots/pricing.png"><img src="docs/screenshots/pricing.png" alt="Pricing"></a><br><sub>Pricing</sub></td>
+    <td width="33%"><a href="docs/screenshots/integrations.png"><img src="docs/screenshots/integrations.png" alt="Integrations"></a><br><sub>Integrations</sub></td>
+  </tr>
+</table>
+
 ## Running it
 
 Requires Node 20 or newer.
