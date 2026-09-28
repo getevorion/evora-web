@@ -1,7 +1,9 @@
 # Evora web
 
-The public website for [Evora](https://evora.cx): marketing pages, the
-documentation, and the shared UI components they are built from. Next.js.
+The public website for Evora: marketing pages, the documentation, and the
+shared UI components they are built from. Next.js.
+
+**[evora.cx](https://evora.cx)** &nbsp;·&nbsp; [Documentation](https://evora.cx/docs) &nbsp;·&nbsp; [Pricing](https://evora.cx/pricing) &nbsp;·&nbsp; [Changelog](https://evora.cx/updates)
 
 ![The Evora home page](docs/screenshots/home.png)
 
@@ -59,5 +61,5 @@ Copy `.env.example` to `.env.local` to override the API host:
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-"Evora" and the Evora logo are trademarks and are not licensed by it. Replace
-the branding and the assets in `public/` in any derived work.
+"Evora", "Evorion" and the logo are trademarks of Evorion and are not licensed
+by it. Replace the branding and the assets in `public/` in any derived work.
