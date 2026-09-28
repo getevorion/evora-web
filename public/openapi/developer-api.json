@@ -1,0 +1,5637 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Evora Developer API",
+    "version": "1.0.0",
+    "summary": "Manage applications, licenses, end-users and subscriptions programmatically.",
+    "description": "The Developer API is the server-to-server surface behind Evora. It is what you\nbuild customer panels, Discord bots, storefront integrations and CI automation\non top of.\n\n## Authentication\n\nEvery endpoint takes a bearer API key created in the developer dashboard:\n\n```\nAuthorization: Bearer ag_sk_your_key_here\n```\n\nKeys are shown once on creation, carry an explicit scope list, and may be\nlocked to a single application. **Keys are server-side credentials** — never\nship one to a browser or a desktop client. CORS blocks browser origins for\nexactly this reason: your panel's backend calls this API and proxies results\nto its own frontend.\n\n## Rate limits\n\nTwo limits apply, and you can hit either:\n\n- A fixed anti-abuse ceiling of **300 requests/minute per key**.\n- Your **plan's requests-per-minute quota**, which is the one you will meet\n  first in normal use. A key may also carry its own lower\n  `rateLimitPerMinute`, useful when handing a key to a third party.\n\nExceeding a limit returns `429` with `retry_after` in seconds. An expired or\nover-quota subscription returns `402`. Poll `GET /quota` rather than guessing.\n\nCredential-verifying endpoints (`/users/authenticate`,\n`/licenses/authenticate`, `/users/{userId}/password-reset`) carry their own\ntighter buckets keyed on the credential being tried, so a stolen key cannot\nbe used to grind passwords or enumerate license keys.\n\n## Conventions\n\nResponses are plain JSON objects. List endpoints return their collection\nunder a named key alongside pagination fields. Errors return\n`{ \"error\": \"...\" }` and many add a stable machine-readable `code` you can\nbranch on — prefer `code` over string-matching `error`.\n",
+    "contact": {
+      "name": "Evora",
+      "url": "https://evora.cx/docs"
+    },
+    "x-llms-txt": "https://evora.cx/llms.txt"
+  },
+  "servers": [
+    {
+      "url": "https://api.evora.cx/api/developer-api",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Quota",
+      "description": "Plan limits and current usage."
+    },
+    {
+      "name": "Applications",
+      "description": "Create and configure applications."
+    },
+    {
+      "name": "Statistics",
+      "description": "Aggregate analytics for dashboards."
+    },
+    {
+      "name": "Licenses",
+      "description": "Generate, manage and authenticate license keys."
+    },
+    {
+      "name": "Users",
+      "description": "End-user accounts (your customers)."
+    },
+    {
+      "name": "Authentication",
+      "description": "Verify a customer's credentials or license key from your own panel."
+    },
+    {
+      "name": "Subscriptions",
+      "description": "A user's entitlement to an application, including freeze/resume."
+    },
+    {
+      "name": "Subscription tiers",
+      "description": "The named levels an application offers."
+    },
+    {
+      "name": "Variables",
+      "description": "App-wide and per-user key/value storage readable by the SDK."
+    },
+    {
+      "name": "Webhooks",
+      "description": "Outbound event delivery, plus the event stream that backs it.\n\n**Verify every payload.** If the webhook has a secret, each request carries\n`X-Evora-Timestamp` and `X-Evora-Signature`, where the signature is\n`HMAC_SHA256(secret, timestamp + \".\" + rawBody)` as lowercase hex. Compute\nit over the RAW body before JSON parsing, compare with a constant-time\nfunction, and reject anything whose timestamp is far from now. An endpoint\nthat skips this can be driven by anyone who learns its URL.\n\n**Deduplicate on `X-Evora-Event-Id`.** Retries reuse the same id, so\nrecording processed ids is what keeps a redelivery from granting twice.\n`X-Evora-Delivery-Attempt` tells you which try you are receiving.\n\n**Delivery is at-least-once, not guaranteed.** A non-2xx response is\nretried with exponential backoff — 6 attempts across roughly two hours —\nafter which the event is left in the stream and not retried again. An\nendpoint that keeps failing is auto-disabled and the developer notified.\n\nThe retry window is deliberately short: enforcement is pull-based, so a\nmissed webhook can never grant or extend access. For anything longer than\na brief outage, read `GET /apps/{appId}/events?since=` — that is the\ndurable path, and it works even with no webhook configured.\n"
+    },
+    {
+      "name": "Access control",
+      "description": "Blacklist and whitelist entries."
+    },
+    {
+      "name": "Sessions",
+      "description": "Live SDK sessions."
+    },
+    {
+      "name": "Logs",
+      "description": "Authentication and event history."
+    },
+    {
+      "name": "Sellers",
+      "description": "Reseller accounts."
+    },
+    {
+      "name": "Clients",
+      "description": "Sub-accounts you grant per-application management access."
+    },
+    {
+      "name": "Entitlements",
+      "description": "Fine-grained feature flags attached to tiers or users."
+    },
+    {
+      "name": "Geo",
+      "description": "Country-level access rules."
+    },
+    {
+      "name": "Floating licenses",
+      "description": "Concurrent-seat leases."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ag_sk_",
+        "description": "API key created in the developer dashboard. Send as\n`Authorization: Bearer ag_sk_...`.\n"
+      }
+    },
+    "parameters": {
+      "AppId": {
+        "name": "appId",
+        "in": "path",
+        "required": true,
+        "description": "Application UUID. App-scoped keys may only use their own application.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "description": "End-user UUID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "LicenseId": {
+        "name": "licenseId",
+        "in": "path",
+        "required": true,
+        "description": "License UUID. Ban, unban, pause, unpause, reset-hwid and expiry also accept the raw license key here.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "description": "1-based page number.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Rows per page.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        }
+      },
+      "Search": {
+        "name": "search",
+        "in": "query",
+        "description": "Substring match. Intended for dashboard search — never use it as a login lookup.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed or semantically invalid request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Invalid request body"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, malformed, revoked or expired API key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Invalid or expired API key"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Key lacks the required scope, or the resource belongs to another tenant.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "API key missing required scope: users:write"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource does not exist under this developer.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "User not found"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Subscription expired or a plan quota was exhausted.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Subscription expired"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Rate limit exceeded.",
+              "retry_after": 42
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Unexpected server error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable message. Do not branch on this."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable identifier, where available."
+          },
+          "retry_after": {
+            "type": "integer",
+            "description": "Seconds to wait, on 429 responses."
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "description": "Returned alongside the collection on every list endpoint.",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Rows matching the query, across all pages."
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "ceil(total / limit). Stop when page reaches it."
+          }
+        }
+      },
+      "App": {
+        "type": "object",
+        "description": "Server-side secrets are never returned; read them from the dashboard credentials view.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "auth_mode": {
+            "type": "string",
+            "enum": [
+              "license",
+              "user_pass",
+              "both"
+            ],
+            "description": "Which SDK authentication paths are available.\n`license` blocks login/register; `user_pass` blocks license-key auth.\n"
+          },
+          "hwid_lock": {
+            "type": "boolean"
+          },
+          "free_mode": {
+            "type": "boolean"
+          },
+          "twofa_policy": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "optional",
+              "required"
+            ],
+            "default": "optional",
+            "description": "Whether your customers may enrol a second factor (TOTP).\n`disabled` blocks enrolment and ignores existing enrolments at login;\n`optional` challenges only those who have enrolled;\n`required` refuses sign-in with `TWOFA_ENROLMENT_REQUIRED` until the\ncustomer enrols, and prevents them turning it back off.\n"
+          },
+          "stats_public": {
+            "type": "boolean",
+            "default": false,
+            "description": "Publishes user, licence and online counts to the SDK via `FetchStats`.\nOff by default: these are commercial figures and every client binary is\nin someone else's hands, so this is a disclosure you opt into.\n"
+          },
+          "allow_subscription_pause": {
+            "type": "boolean",
+            "description": "Must be true before a subscription can be frozen."
+          },
+          "hwid_reset_cooldown_hours": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "description": "An end-user (your customer). Scoped to you, shared across all your applications.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string",
+            "description": "Lowercased. Only `a-z 0-9 _ - .` — the same charset the SDK accepts at login."
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "banned": {
+            "type": "boolean"
+          },
+          "ban_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "hwid": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_login": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "The tier name you configured, e.g. \"VIP\"."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "null means lifetime."
+          },
+          "hwid": {
+            "type": "string",
+            "nullable": true
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "False when expired **or** paused — the same verdict the SDK reaches.\nUse this rather than comparing `expiresAt` yourself.\n"
+          }
+        }
+      },
+      "License": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "license_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unused",
+              "active",
+              "expired",
+              "banned",
+              "paused"
+            ]
+          },
+          "level": {
+            "type": "integer"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "hwid": {
+            "type": "string",
+            "nullable": true,
+            "description": "When set, only this machine may redeem the key."
+          },
+          "redeemed_by_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_for_user_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "When set, only this user may redeem the key."
+          },
+          "is_master": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "all",
+                "user.register",
+                "user.login",
+                "user.banned",
+                "user.unbanned",
+                "license.used",
+                "subscription.created",
+                "subscription.extended",
+                "subscription.paused",
+                "subscription.resumed",
+                "subscription.removed",
+                "hwid.reset",
+                "blacklist.blocked",
+                "anti_debug.detected",
+                "anti_vm.detected",
+                "anti_hv.detected",
+                "anti_http_debug.detected",
+                "anti_attach.detected"
+              ]
+            },
+            "description": "Event names, or `all`.\n\nThe `subscription.*` and `hwid.reset` events exist so a customer\nportal can mirror entitlement state without polling. Note there is\nno `subscription.expired`: expiry is not an action anything\nperforms, it is `expires_at` passing while nobody is looking. Derive\nit from the `expiry` field, or read `subscription.active` from the\nauthenticate endpoints, which apply the same rule the SDK does.\n"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RedeemResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "appId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "appName": {
+                "type": "string"
+              },
+              "extended": {
+                "type": "boolean",
+                "description": "Present when an existing subscription was extended."
+              },
+              "subscriptionLevel": {
+                "type": "integer"
+              },
+              "subscriptionName": {
+                "type": "string",
+                "nullable": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/quota": {
+      "get": {
+        "tags": [
+          "Quota"
+        ],
+        "summary": "Plan quota and current usage",
+        "description": "Returns `quota`, `usage`, `limits` (apps, clients, requests per day and per\nminute) and `subscription` (expiry, days remaining, grace period). Poll this\ninstead of inferring limits from a `402` or `429`.\n\n**Scope:** `apps:read`\n",
+        "responses": {
+          "200": {
+            "description": "Quota status.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "quota": {
+                    "maxApps": 10,
+                    "maxClientsPerApp": 5000,
+                    "requestsPerMinute": 120,
+                    "planTier": "platinum"
+                  },
+                  "usage": {
+                    "appsCount": 3,
+                    "totalClients": 412,
+                    "requestsToday": 8123,
+                    "requestsThisMinute": 4
+                  },
+                  "limits": {
+                    "apps": {
+                      "current": 3,
+                      "max": 10,
+                      "unlimited": false,
+                      "percentage": 30
+                    }
+                  },
+                  "subscription": {
+                    "expiresAt": "2027-01-01T00:00:00.000Z",
+                    "daysRemaining": 148,
+                    "inGracePeriod": false,
+                    "expired": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/apps": {
+      "get": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "List applications",
+        "description": "App-scoped keys return only their own application. **Scope:** `apps:read`",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Search"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applications.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "apps": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/App"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Create an application",
+        "description": "Rejected for app-scoped keys. **Scope:** `apps:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "auth_mode": {
+                    "type": "string",
+                    "enum": [
+                      "license",
+                      "user_pass",
+                      "both"
+                    ],
+                    "default": "both"
+                  },
+                  "twofa_policy": {
+                    "type": "string",
+                    "enum": [
+                      "disabled",
+                      "optional",
+                      "required"
+                    ],
+                    "default": "optional"
+                  },
+                  "stats_public": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              },
+              "example": {
+                "name": "Lunar",
+                "auth_mode": "user_pass"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "app": {
+                      "$ref": "#/components/schemas/App"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "An application with that name already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Get an application",
+        "description": "**Scope:** `apps:read`",
+        "responses": {
+          "200": {
+            "description": "Application.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "app": {
+                      "$ref": "#/components/schemas/App"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Update an application",
+        "description": "Security fields are plan-gated; blocked fields are named in the `403` body.\n**Scope:** `apps:write`\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/App"
+              },
+              "example": {
+                "allow_subscription_pause": true,
+                "hwid_reset_cooldown_hours": 24
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Delete an application",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Application statistics",
+        "description": "**Scope:** `apps:read`",
+        "responses": {
+          "200": {
+            "description": "Stats.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "stats": {
+                    "totalUsers": 412,
+                    "totalLicenses": 1580,
+                    "activeSessions": 37,
+                    "totalBlacklist": 12
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats/overview": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Extended overview",
+        "description": "Users, licenses, sessions and 30-day auth trends. **Scope:** `stats:read`",
+        "responses": {
+          "200": {
+            "description": "Overview.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "stats": {
+                    "totalUsers": 412,
+                    "totalLicenses": 1580,
+                    "activeSessions": 37,
+                    "totalBlacklist": 12,
+                    "authEvents": 9214,
+                    "authByType": {
+                      "login": 7401,
+                      "register": 512,
+                      "license_redeem": 1301
+                    },
+                    "authByDay": [
+                      {
+                        "date": "2026-08-08",
+                        "count": 331
+                      },
+                      {
+                        "date": "2026-08-09",
+                        "count": 298
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats/logins": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "description": "Window length in days, counting back from today.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 30
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Login activity by day",
+        "description": "**Scope:** `stats:read`",
+        "responses": {
+          "200": {
+            "description": "Login buckets.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "logins": [
+                    {
+                      "date": "2026-08-08",
+                      "success": 318,
+                      "failed": 13
+                    },
+                    {
+                      "date": "2026-08-09",
+                      "success": 287,
+                      "failed": 11
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats/users": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "description": "Window length in days, counting back from today.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 30
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "User growth over time",
+        "description": "**Scope:** `stats:read`",
+        "responses": {
+          "200": {
+            "description": "Growth buckets.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "users": [
+                    {
+                      "date": "2026-08-08",
+                      "newUsers": 9,
+                      "total": 403
+                    },
+                    {
+                      "date": "2026-08-09",
+                      "newUsers": 9,
+                      "total": 412
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats/licenses": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "License status breakdown",
+        "description": "**Scope:** `stats:read`",
+        "responses": {
+          "200": {
+            "description": "Breakdown.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "licenses": {
+                    "total": 1580,
+                    "byStatus": {
+                      "unused": 942,
+                      "active": 601,
+                      "expired": 28,
+                      "banned": 6,
+                      "paused": 3
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/stats/sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "description": "Window length in days, counting back from today.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 7
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "summary": "Session trends",
+        "description": "**Scope:** `stats:read`",
+        "responses": {
+          "200": {
+            "description": "Session buckets.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "sessions": {
+                    "active": 37,
+                    "peak": 84,
+                    "byDay": [
+                      {
+                        "date": "2026-08-08",
+                        "sessions": 71
+                      },
+                      {
+                        "date": "2026-08-09",
+                        "sessions": 84
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "List licenses",
+        "description": "**Scope:** `licenses:read`",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Search"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Who minted the key. `developer` is dashboard/API issued, `reseller` is seller issued.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "developer",
+                "reseller"
+              ],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Licenses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/License"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Generate licenses",
+        "description": "Duration is `duration` × `expiry` seconds. `expiry` is the unit multiplier:\n`86400` days, `3600` hours, `60` minutes. `duration: 0` creates a lifetime key.\n\nUnknown fields are ignored rather than rejected, so a typo silently yields a\ndefault 1-day key — send exactly the fields below.\n\n**Scope:** `licenses:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 1,
+                    "description": "How many keys to generate."
+                  },
+                  "duration": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 1,
+                    "description": "Number of units. 0 = lifetime."
+                  },
+                  "expiry": {
+                    "type": "integer",
+                    "default": 86400,
+                    "description": "Seconds per unit: 86400 = days."
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Subscription tier granted."
+                  },
+                  "mask": {
+                    "type": "string",
+                    "default": "*****-*****-*****-*****-*****"
+                  },
+                  "note": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "uppercase": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "lowercase": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "is_master": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              },
+              "examples": {
+                "thirtyDays": {
+                  "summary": "10 keys, 30 days, level 1",
+                  "value": {
+                    "amount": 10,
+                    "duration": 30,
+                    "expiry": 86400,
+                    "level": 1
+                  }
+                },
+                "lifetime": {
+                  "summary": "1 lifetime key",
+                  "value": {
+                    "amount": 1,
+                    "duration": 0,
+                    "level": 2,
+                    "note": "giveaway"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Generated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "licenses": [
+                    "ABCD-EFGH-IJKL-MNOP"
+                  ],
+                  "count": 1
+                }
+              }
+            }
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/authenticate": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Authentication",
+          "Licenses"
+        ],
+        "summary": "Authenticate a customer by license key",
+        "description": "The license-mode counterpart of `/users/authenticate`. On an app where the\nkey *is* the credential, this resolves the customer behind it and returns the\nsame `user` + `subscription` envelope — so one panel implementation works for\nboth authentication modes.\n\nMatches the **whole key only** and is rate-limited per key. Do not build a key\nlogin on `GET /licenses?search=`, which is a substring match and would let\nsomeone probe partial keys.\n\nUnknown keys and keys belonging to another application return an identical\nerror, so this cannot be used to enumerate keys.\n\n**Scope:** `licenses:read`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "licenseKey"
+                ],
+                "properties": {
+                  "licenseKey": {
+                    "type": "string",
+                    "maxLength": 512
+                  }
+                }
+              },
+              "example": {
+                "licenseKey": "ABCD-EFGH-IJKL-MNOP"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Key is valid. `authenticated` indicates whether it resolved to a customer.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "activated": {
+                    "summary": "Activated key — customer resolved",
+                    "value": {
+                      "authenticated": true,
+                      "license": {
+                        "id": "6f1e...",
+                        "status": "active",
+                        "level": 1,
+                        "expiresAt": "2026-09-01T00:00:00.000Z",
+                        "hwid": null,
+                        "isMaster": false
+                      },
+                      "user": {
+                        "id": "4a28...",
+                        "username": "license_abcd-efg",
+                        "banned": false
+                      },
+                      "subscription": {
+                        "level": 1,
+                        "name": "Premium",
+                        "expiresAt": "2026-09-01T00:00:00.000Z",
+                        "hwid": "A1B2",
+                        "paused": false,
+                        "active": true
+                      }
+                    }
+                  },
+                  "notActivated": {
+                    "summary": "Valid key never used in the app yet",
+                    "value": {
+                      "authenticated": false,
+                      "code": "LICENSE_NOT_ACTIVATED",
+                      "license": {
+                        "id": "6f1e...",
+                        "status": "unused",
+                        "level": 1,
+                        "expiresAt": null,
+                        "hwid": null,
+                        "isMaster": false
+                      },
+                      "user": null,
+                      "subscription": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unknown key, or a key belonging to another application.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": false,
+                  "error": "Invalid license key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key or its owner is banned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": false,
+                  "error": "License is banned",
+                  "code": "KEY_BANNED"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Get a license",
+        "description": "Accepts a UUID only. To look up by key, use `/licenses/authenticate`. **Scope:** `licenses:read`",
+        "responses": {
+          "200": {
+            "description": "License.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "license": {
+                      "$ref": "#/components/schemas/License"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Update a license",
+        "description": "**Scope:** `licenses:write`",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "unused",
+                      "active",
+                      "expired",
+                      "banned",
+                      "paused"
+                    ]
+                  },
+                  "duration_seconds": {
+                    "type": "integer"
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Delete a license",
+        "description": "On a license-mode application, deleting a redeemed key **revokes that\ncustomer's access**, because license login resolves the customer through the\nkey. Their subscription row survives but becomes unreachable.\n\n**Scope:** `licenses:write`\n",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "License deleted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/ban": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Ban a license",
+        "description": "Optionally cascades to the redeemer and their HWID/IP history. **Scope:** `licenses:write`",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "banUserToo": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "blacklistHwid": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "blacklistIp": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "days": {
+                    "type": "integer",
+                    "description": "Blacklist duration; omit for permanent."
+                  }
+                }
+              },
+              "example": {
+                "reason": "chargeback",
+                "banUserToo": true,
+                "blacklistHwid": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Banned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "blacklist": {
+                    "hwidsAdded": 2,
+                    "ipsAdded": 3
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/unban": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Unban a license",
+        "description": "Restores the key's prior state — `unused` if it was never redeemed, `active`\nif it was. **Scope:** `licenses:write`\n",
+        "responses": {
+          "200": {
+            "description": "Unbanned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/reset-hwid": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Reset a license HWID",
+        "description": "Also clears the redeemer's subscription HWID and device binding. **Scope:** `licenses:write`",
+        "responses": {
+          "200": {
+            "description": "Reset.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "License HWID reset successfully"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/pause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Freeze a license",
+        "description": "Banks the remaining time and stops the clock. **Scope:** `licenses:write`",
+        "responses": {
+          "200": {
+            "description": "Paused.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "License paused"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not currently active."
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/unpause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Resume a frozen license",
+        "description": "Converts banked seconds back into a fresh expiry. **Scope:** `licenses:write`",
+        "responses": {
+          "200": {
+            "description": "Resumed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "License resumed"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not currently paused."
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/{licenseId}/expiry": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/LicenseId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Adjust license expiry by a signed delta",
+        "description": "Moves one license's expiry by `deltaSeconds` — positive to grant time,\nnegative to take it back. `{licenseId}` accepts the **printable license\nkey** as well as the UUID, so a settlement loop never has to resolve one\nfirst.\n\nWritten for time-wager features (\"key gambling\"), where a customer\nstakes minutes against your own game logic and your server settles the\nresult. Prefer this over reading `expires_at` and writing it back with\n`PUT /licenses/{licenseId}`: the delta is applied inside a single\nstatement, so two settlements landing at the same instant compose\ninstead of one silently overwriting the other.\n\nBehaviour worth knowing:\n\n- Expiry floors at **now** — a loss bigger than the time remaining\n  expires the key; it never rewinds into the past.\n- `duration_seconds` and banked `remaining_seconds` floor at `0`.\n- A **paused** license keeps its expiry, and the delta is applied to its\n  banked seconds instead.\n- A **lifetime** key (`expires_at: null`) is left untouched and returns\n  `lifetime: true` — there is no expiry to move.\n- The redeemer's subscription moves in the same statement, so the SDK\n  and your panel never disagree about when access ends.\n\n**Scope:** `licenses:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deltaSeconds"
+                ],
+                "properties": {
+                  "deltaSeconds": {
+                    "type": "integer",
+                    "description": "Seconds to add (positive) or take back (negative). Non-zero, within +/-315360000 (10 years)."
+                  }
+                }
+              },
+              "example": {
+                "deltaSeconds": -1800
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Applied. Returns the license's settled state.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "license": {
+                    "id": "9c1f2e7a-5b30-4a11-9d64-0f2b8c7a5e10",
+                    "key": "HA7N-9CGB-RFV2-MPAN",
+                    "status": "active",
+                    "expiresAt": "2026-09-01T12:00:00.000Z",
+                    "remainingSeconds": null
+                  },
+                  "applied_seconds": -1800,
+                  "lifetime": false,
+                  "subscriptions_updated": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`deltaSeconds` absent, zero, or out of range (`INVALID_DELTA`)."
+          },
+          "403": {
+            "description": "You do not own this application."
+          },
+          "404": {
+            "description": "No license with that key or id in this application."
+          }
+        }
+      }
+    },
+    "/apps/{appId}/licenses/bulk": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Licenses"
+        ],
+        "summary": "Bulk license actions",
+        "description": "Acts on existing licenses; it does **not** create them — to generate many at\nonce use `amount` on `POST /licenses`. Unsupported actions return `400` rather\nthan silently affecting nothing.\n\n**Scope:** `licenses:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "delete_unused",
+                      "delete_all",
+                      "delete_selected",
+                      "ban_selected",
+                      "unban_selected",
+                      "extend_selected",
+                      "add_time",
+                      "reset_hwid_selected",
+                      "pause_selected",
+                      "unpause_selected",
+                      "extend_all",
+                      "ban_all",
+                      "unban_all",
+                      "pause_all",
+                      "unpause_all",
+                      "reset_hwid_all",
+                      "delete_all_matching"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Required by every `*_selected` action."
+                  },
+                  "durationSeconds": {
+                    "type": "integer",
+                    "description": "Required by `extend_selected`, `extend_all`, `add_time`."
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "sourceFilter": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "developer",
+                      "reseller"
+                    ],
+                    "default": "all",
+                    "description": "Which slice `*_all` actions apply to."
+                  }
+                }
+              },
+              "examples": {
+                "banSelected": {
+                  "value": {
+                    "action": "ban_selected",
+                    "ids": [
+                      "6f1e...",
+                      "7a2f..."
+                    ],
+                    "reason": "chargeback"
+                  }
+                },
+                "extendAll": {
+                  "value": {
+                    "action": "extend_all",
+                    "durationSeconds": 604800,
+                    "sourceFilter": "all"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Applied.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "affected": 12
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required field, or an unsupported action.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Unsupported bulk action: frobnicate"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/authenticate": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Authentication",
+          "Users"
+        ],
+        "summary": "Authenticate a customer by username and password",
+        "description": "Verifies credentials for your own panel. **No session is issued** — you mint\nyour own cookie or JWT. Evora only answers \"are these credentials correct, and\nwhat is this customer entitled to\".\n\nExpired customers still authenticate successfully with `subscription.active:\nfalse`, which is what lets them log in to renew.\n\nRate-limited per (key, username) so a stolen key cannot password-spray one\naccount.\n\n**Scope:** `users:read`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "username": "craigfan",
+                "password": "hunter2hunter2"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credentials correct.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": true,
+                  "user": {
+                    "id": "4a28...",
+                    "username": "craigfan",
+                    "banned": false
+                  },
+                  "subscription": {
+                    "level": 2,
+                    "name": "Pro",
+                    "expiresAt": "2026-09-01T00:00:00.000Z",
+                    "hwid": "A1B2",
+                    "paused": false,
+                    "active": true
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong username or password — deliberately indistinguishable.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": false,
+                  "error": "Invalid credentials"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account is banned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": false,
+                  "error": "User is banned",
+                  "reason": "chargeback"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/lookup": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "username",
+          "in": "query",
+          "description": "Exact username, case-insensitive. Not a substring search.",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Look up a customer by username",
+        "description": "**Scope:** `users:read`",
+        "responses": {
+          "200": {
+            "description": "User and subscription.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                    "username": "ghost",
+                    "email": "ghost@example.com",
+                    "banned": false,
+                    "ban_reason": null,
+                    "hwid": "A1B2-C3D4-E5F6",
+                    "last_login": "2026-08-10T09:14:02.000Z",
+                    "created_at": "2026-05-02T18:40:11.000Z"
+                  },
+                  "subscription": {
+                    "level": 2,
+                    "expiresAt": "2026-12-01T00:00:00.000Z",
+                    "hwid": "A1B2-C3D4-E5F6",
+                    "active": true
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List customers",
+        "description": "App-scoped keys are implicitly filtered to their application, which means\ncustomers with no subscription to that app are not listed.\n**Scope:** `users:read`\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Search"
+          },
+          {
+            "name": "appId",
+            "in": "query",
+            "description": "Return only users holding a subscription to this application.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/User"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create a customer",
+        "description": "A password of at least 6 characters is **required** — there is no self-service\nway for an end-user to set one later, and an account created without one can\nnever be logged into.\n\nUsernames are lowercased and restricted to `a-z 0-9 _ - .`, matching what the\nSDK accepts at login.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 50
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true
+                  }
+                }
+              },
+              "example": {
+                "username": "craigfan",
+                "password": "hunter2hunter2"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "description": "Username already exists."
+          }
+        }
+      }
+    },
+    "/users/{userId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get a customer",
+        "description": "**Scope:** `users:read`",
+        "responses": {
+          "200": {
+            "description": "Customer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update a customer",
+        "description": "Setting `password` here also voids any outstanding password-reset tokens for\nthis customer. This is the simplest way to complete a reset when you have\nalready verified who is asking.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 50
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true
+                  }
+                }
+              },
+              "example": {
+                "password": "newPassword123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete a customer",
+        "description": "**Scope:** `users:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "User deleted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/password-reset": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users",
+          "Authentication"
+        ],
+        "summary": "Mint a password-reset token",
+        "description": "**Evora issues and verifies; you deliver.** No email is sent from our side —\nyour customers are yours, and most have no address on file. Send the returned\ntoken over whatever channel you already use (a Discord DM, your own mail\nprovider, a link on your panel), then call `/password-reset/fulfil`.\n\nThe plaintext token is returned **once** and is not retrievable again; only a\nSHA-256 hash is stored.\n\nBecause you identify the customer by `userId` rather than from an email form,\nthis endpoint is not a user-enumeration oracle. Preserve that property in your\nown panel by responding identically whether or not an account exists.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Recorded for audit."
+                  },
+                  "ttlSeconds": {
+                    "type": "integer",
+                    "minimum": 300,
+                    "maximum": 86400,
+                    "default": 1800
+                  }
+                }
+              },
+              "example": {
+                "ttlSeconds": 1800
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token minted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "reset_token": "s7Fv3k9Qx1...",
+                  "expires_at": "2026-08-06T18:30:00.000Z",
+                  "expires_in": 1800,
+                  "warning": "Deliver this token to the user now — it is not retrievable again."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The customer is banned."
+          },
+          "429": {
+            "description": "Too many live tokens for this customer (max 3), or issuance rate exceeded.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Too many active reset tokens for this user.",
+                  "code": "RESET_RATE_LIMITED"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/password-reset/fulfil": {
+      "post": {
+        "tags": [
+          "Users",
+          "Authentication"
+        ],
+        "summary": "Consume a reset token and set the new password",
+        "description": "Single use. Succeeding also voids every other outstanding token for that\ncustomer and terminates their live SDK sessions — a reset must evict whoever\nwas already signed in.\n\nExpired, already-used, unknown and cross-tenant tokens all return the same\nerror.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "newPassword"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 100
+                  }
+                }
+              },
+              "example": {
+                "token": "s7Fv3k9Qx1...",
+                "newPassword": "newPassword123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Password updated",
+                  "userId": "4a28...",
+                  "username": "craigfan",
+                  "sessions_terminated": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid, expired, already used, or belonging to another tenant.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Invalid or expired reset token",
+                  "code": "INVALID_TOKEN"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The customer is banned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "This account is banned",
+                  "code": "USER_BANNED"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/ban": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Ban a customer",
+        "description": "Optionally blacklists every HWID/IP they have used. **Scope:** `users:write`",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "blacklistHwid": {
+                    "type": "boolean"
+                  },
+                  "blacklistIp": {
+                    "type": "boolean"
+                  },
+                  "days": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Banned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "User banned",
+                  "blacklist": {
+                    "hwidsAdded": 1,
+                    "ipsAdded": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/unban": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Unban a customer",
+        "description": "**Scope:** `users:write`",
+        "responses": {
+          "200": {
+            "description": "Unbanned.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "User unbanned"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/reset-hwid": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reset a customer's HWID",
+        "description": "Pass `appId` to reset for one application and enforce that app's cooldown.\nOmit it to clear the customer's HWID everywhere, including device bindings.\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "HWID reset successfully",
+                  "cooldownHours": 24
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Cooldown active.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "HWID reset on cooldown",
+                  "cooldownHours": 24,
+                  "cooldownRemainingHours": 7
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/2fa": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Read a customer's two-factor state",
+        "description": "Whether the customer has enrolled a second factor, when they did, how many\nsingle-use backup codes they have left, and whether their second factor is\ncurrently locked out after repeated wrong codes.\n\nNever returns the shared secret or the backup codes themselves — the codes\nare stored hashed and the secret is not retrievable after enrolment.\n**Scope:** `users:read`\n",
+        "responses": {
+          "200": {
+            "description": "Two-factor state.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "enabled": true,
+                  "enrolled_at": "2026-08-21T14:20:55.243Z",
+                  "backup_codes_remaining": 8,
+                  "locked_until": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found, or not yours.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "User not found"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reset a customer's two-factor authentication",
+        "description": "Clears the customer's second factor so they can enrol again. For the support\ncase where someone has lost both their authenticator app and their backup\ncodes.\n\nThis is the only path that removes a second factor **without presenting a\ncode**, which is why it requires your developer credentials and is not\nreachable from the SDK — a self-service \"turn it off\" would defeat the\nfeature entirely.\n\nThe customer's live sessions across your applications are ended at the same\ntime, on the assumption that the reason for the reset may have been a\ncompromise.\n**Scope:** `users:write`\n",
+        "responses": {
+          "200": {
+            "description": "Two-factor cleared and sessions ended.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The customer does not have two-factor enabled.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Two-factor authentication is not enabled for this user"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found, or not yours.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "User not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/reset-device": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reset a customer's device binding",
+        "description": "**Scope:** `users:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "appId"
+                ],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Device binding reset successfully"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/issue-session-token": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users",
+          "Authentication"
+        ],
+        "summary": "Mint a one-time SDK login token (panel SSO)",
+        "description": "Lets your panel sign a customer into the SDK without ever handling their\npassword. The token is bound to the exact HWID you pass, is single-use, and\nexpires quickly. Your loader trades it at `POST /api/v2/proxy/login-by-token`.\n\nRefused for banned customers and for customers with no subscription to the\napplication.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "appId",
+                  "hwid"
+                ],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "hwid": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 256
+                  },
+                  "ttlSeconds": {
+                    "type": "integer",
+                    "minimum": 30,
+                    "maximum": 300
+                  }
+                }
+              },
+              "example": {
+                "appId": "864a...",
+                "hwid": "A1B2C3D4",
+                "ttlSeconds": 120
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token issued.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "exchange_token": "eyJ...",
+                  "jti": "9f1c...",
+                  "expires_at": 1786000000,
+                  "expires_in": 120
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found, or has no subscription to this application."
+          }
+        }
+      }
+    },
+    "/users/{userId}/redeem": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Users",
+          "Licenses"
+        ],
+        "summary": "Redeem a license key on a customer's behalf",
+        "description": "Server-to-server redemption — the primitive behind a Discord `/redeem` command\nor a panel's \"add time\" box. Identical semantics to redeeming in the loader:\nthe same validation, the same protection against consuming a key that grants\nnothing, and the same `license.used` webhook.\n\nRenewal works even when the subscription has already lapsed; time is added\nfrom now rather than from the old expiry.\n\n### Tiers\n\nA subscription is a single record with one level and one clock, so a key\nis only applied when the result is unambiguous:\n\n- **Higher tier** — upgrades, and keeps the remaining time.\n- **Same tier** — extends.\n- **Lower tier, subscription still active** — refused as `TIER_DOWNGRADE`\n  and *not consumed*. Extending at the higher tier would let cheap keys\n  renew an expensive tier; dropping the tier would take away something\n  already paid for. The key stays valid and works once the current\n  subscription lapses.\n- **Lower tier, subscription lapsed** — accepted, and the key's tier\n  applies from scratch.\n- **Timed key against a lifetime subscription** — refused as\n  `TIER_CONFLICT` and not consumed, since \"higher tier for 30 days, then\n  back to lifetime\" cannot be represented.\n\n**Scope:** `licenses:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "licenseKey"
+                ],
+                "properties": {
+                  "licenseKey": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 512
+                  }
+                }
+              },
+              "example": {
+                "licenseKey": "ABCD-EFGH-IJKL-MNOP"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Redeemed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemResult"
+                },
+                "example": {
+                  "success": true,
+                  "message": "Subscription updated",
+                  "data": {
+                    "appId": "864a...",
+                    "appName": "Lunar",
+                    "extended": true,
+                    "subscriptionLevel": 2,
+                    "subscriptionName": "Pro",
+                    "expiresAt": "2026-10-01T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected without consuming the key. `code` is one of `INVALID_KEY`,\n`ALREADY_REDEEMED`, `ALREADY_REDEEMED_BY_YOU`, `NO_BENEFIT`,\n`TIER_DOWNGRADE`, `TIER_CONFLICT`.\n",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "noBenefit": {
+                    "summary": "Nothing to gain",
+                    "value": {
+                      "error": "This key provides no additional benefit for the current subscription",
+                      "code": "NO_BENEFIT"
+                    }
+                  },
+                  "tierDowngrade": {
+                    "summary": "Lower tier while the current one is still active",
+                    "value": {
+                      "error": "This key is for a lower tier than the current subscription. It has not been used — redeem it once the current subscription expires.",
+                      "code": "TIER_DOWNGRADE"
+                    }
+                  },
+                  "tierConflict": {
+                    "summary": "Timed key against a lifetime subscription",
+                    "value": {
+                      "error": "A timed key cannot upgrade a lifetime subscription. It has not been used — a lifetime key of the higher tier is required.",
+                      "code": "TIER_CONFLICT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`KEY_BANNED`, `KEY_PAUSED`, `NOT_FOR_THIS_USER`, `HWID_MISMATCH`, or `QUOTA_EXCEEDED`.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "This license key is locked to different hardware",
+                  "code": "HWID_MISMATCH"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another request claimed the key first.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "License already redeemed",
+                  "code": "RACE_LOST"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/bulk": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Bulk customer actions",
+        "description": "**Scope:** `users:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action",
+                  "ids"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "delete_selected",
+                      "ban_selected",
+                      "unban_selected",
+                      "reset_hwid_selected",
+                      "extend_selected"
+                    ]
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Required by `extend_selected`."
+                  },
+                  "days": {
+                    "type": "integer",
+                    "description": "Required by `extend_selected`."
+                  },
+                  "blacklistHwid": {
+                    "type": "boolean"
+                  },
+                  "blacklistIp": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Applied.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "affected": 5
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/subscriptions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List a customer's subscriptions",
+        "description": "Lapsed subscriptions are hidden by default. Pass `includeExpired=true` to\ninclude them; each row carries `status: active | expired`.\n**Scope:** `users:read`\n",
+        "parameters": [
+          {
+            "name": "includeExpired",
+            "in": "query",
+            "description": "Include lapsed subscriptions. Each row then carries `status` (`active` or `expired`) so a panel can show \"expired\" rather than the row vanishing.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscriptions.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "subscriptions": [
+                    {
+                      "app_id": "3f7b1d90-24c8-4a1e-9b63-0e5a8c2d7f11",
+                      "subscription_level": 2,
+                      "expires_at": "2026-12-01T00:00:00.000Z",
+                      "hwid": "A1B2-C3D4-E5F6",
+                      "paused": false,
+                      "status": "active"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Grant a subscription directly",
+        "description": "Rejected with `AUTH_MODE_REQUIRES_LICENSE` on applications whose `auth_mode`\nis `license`: the SDK reaches those customers only through a redeemed key, so\na keyless grant would create an account nobody could ever sign in as. Use\n`/users/{userId}/redeem` there instead.\n\n**Scope:** `users:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "appId"
+                ],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subscriptionLevel": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "hwid": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Granted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "subscription": {
+                    "app_id": "3f7b1d90-24c8-4a1e-9b63-0e5a8c2d7f11",
+                    "subscription_level": 2,
+                    "expires_at": "2026-12-01T00:00:00.000Z",
+                    "hwid": null,
+                    "paused": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`AUTH_MODE_REQUIRES_LICENSE` on a license-mode application."
+          }
+        }
+      }
+    },
+    "/users/{userId}/subscriptions/{appId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        },
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Remove a subscription",
+        "description": "**Scope:** `users:write`",
+        "responses": {
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Subscription removed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/subscriptions/{appId}/pause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        },
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Freeze a subscription",
+        "description": "Banks the remaining time in `remaining_seconds` and stops the clock. Requires\n`allow_subscription_pause` on the application.\n\nA frozen subscription reports `active: false` from both authenticate\nendpoints, matching what the SDK enforces.\n\n**Scope:** `users:write`\n",
+        "responses": {
+          "200": {
+            "description": "Frozen.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Subscription paused",
+                  "remainingSeconds": 1209600
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Freezing is not enabled for this application.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Subscription pausing is not enabled for this application",
+                  "code": "PAUSE_NOT_ENABLED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No subscription, or already frozen."
+          }
+        }
+      }
+    },
+    "/users/{userId}/subscriptions/{appId}/unpause": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        },
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Resume a frozen subscription",
+        "description": "Converts the banked seconds into a fresh expiry. Deliberately **not** gated on\n`allow_subscription_pause`, so turning the feature off never strands customers\nwho are already frozen.\n\n**Scope:** `users:write`\n",
+        "responses": {
+          "200": {
+            "description": "Resumed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Subscription resumed",
+                  "expiresAt": "2026-09-15T00:00:00.000Z"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No subscription, or not frozen."
+          }
+        }
+      }
+    },
+    "/users/{userId}/subscriptions/extend": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Extend a subscription by days",
+        "description": "**Scope:** `users:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "appId",
+                  "days"
+                ],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 36500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extended.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Subscription extended by 30 days"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/subscriptions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Subscription tiers"
+        ],
+        "summary": "List tiers",
+        "description": "The named levels your application offers. **Scope:** `apps:read`",
+        "responses": {
+          "200": {
+            "description": "Tiers.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "subscriptions": [
+                    {
+                      "id": "b41c7e02-9a6d-4f13-8c5b-2e7a0d9f4416",
+                      "name": "VIP",
+                      "level": 2
+                    },
+                    {
+                      "id": "d92a4f61-0b3c-4e77-a1d8-6c5b3e9a2708",
+                      "name": "Basic",
+                      "level": 1
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Subscription tiers"
+        ],
+        "summary": "Create a tier",
+        "description": "Tier names appear in redemption responses and SDK `UserData`. **Scope:** `apps:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "level"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              "example": {
+                "name": "Pro",
+                "level": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "subscription": {
+                    "id": "b41c7e02-9a6d-4f13-8c5b-2e7a0d9f4416",
+                    "name": "VIP",
+                    "level": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/subscriptions/{subscriptionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "subscriptionId",
+          "in": "path",
+          "description": "Subscription tier UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "tags": [
+          "Subscription tiers"
+        ],
+        "summary": "Update a tier",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscription tiers"
+        ],
+        "summary": "Delete a tier",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/variables": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "List app variables",
+        "description": "**Scope:** `variables:read`",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variables.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "7e2c9a51-4d80-4b6f-9c13-8a5e0f2d7b64",
+                      "var_key": "cdn_base",
+                      "var_value": "https://cdn.example.com",
+                      "authenticated_only": false,
+                      "created_at": "2026-06-14T11:02:44.000Z"
+                    }
+                  ],
+                  "total": 6,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Create or update a variable",
+        "description": "Upsert by key. **Scope:** `variables:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "var_key"
+                ],
+                "properties": {
+                  "var_key": {
+                    "type": "string"
+                  },
+                  "var_value": {
+                    "type": "string"
+                  },
+                  "authenticated_only": {
+                    "type": "boolean",
+                    "description": "Require an authenticated SDK session to read."
+                  }
+                }
+              },
+              "example": {
+                "var_key": "announcement",
+                "var_value": "v2.1 is live",
+                "authenticated_only": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "variable": {
+                    "id": "7e2c9a51-4d80-4b6f-9c13-8a5e0f2d7b64",
+                    "var_key": "cdn_base",
+                    "var_value": "https://cdn.example.com",
+                    "authenticated_only": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Delete all app variables",
+        "description": "**Scope:** `variables:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "deleted": 6
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/variables/{key}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "key",
+          "in": "path",
+          "required": true,
+          "description": "The `var_key`, not an id.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Get a variable",
+        "description": "**Scope:** `variables:read`",
+        "responses": {
+          "200": {
+            "description": "Variable.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "variable": {
+                    "id": "7e2c9a51-4d80-4b6f-9c13-8a5e0f2d7b64",
+                    "var_key": "cdn_base",
+                    "var_value": "https://cdn.example.com",
+                    "authenticated_only": false
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Update a variable",
+        "description": "Upserts — writing an unknown key creates it. **Scope:** `variables:write`",
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "variable": {
+                    "id": "7e2c9a51-4d80-4b6f-9c13-8a5e0f2d7b64",
+                    "var_key": "cdn_base",
+                    "var_value": "https://cdn2.example.com",
+                    "authenticated_only": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Delete a variable",
+        "description": "**Scope:** `variables:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/user-variables": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "List every user variable in the application",
+        "description": "**Scope:** `variables:read`",
+        "responses": {
+          "200": {
+            "description": "User variables.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "1a8f3c07-62b4-4d95-8e71-3f0c5a9d2e48",
+                      "user_id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                      "var_key": "theme",
+                      "var_value": "dark",
+                      "created_at": "2026-07-01T08:22:19.000Z"
+                    }
+                  ],
+                  "total": 148,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 6
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/{userId}/variables": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "List one customer's variables",
+        "description": "**Scope:** `variables:read`",
+        "responses": {
+          "200": {
+            "description": "Variables.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "1a8f3c07-62b4-4d95-8e71-3f0c5a9d2e48",
+                      "user_id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                      "var_key": "theme",
+                      "var_value": "dark",
+                      "created_at": "2026-07-01T08:22:19.000Z"
+                    }
+                  ],
+                  "total": 3,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Set a customer variable",
+        "description": "Useful for linking external identities — storing a `discord_id` here is how\nmost bots map a Discord user to an Evora customer.\n**Scope:** `variables:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "var_key"
+                ],
+                "properties": {
+                  "var_key": {
+                    "type": "string"
+                  },
+                  "var_value": {
+                    "type": "string"
+                  },
+                  "read_only": {
+                    "type": "boolean",
+                    "description": "Block the SDK from overwriting it."
+                  }
+                }
+              },
+              "example": {
+                "var_key": "discord_id",
+                "var_value": "123456789012345678"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "variable": {
+                    "id": "1a8f3c07-62b4-4d95-8e71-3f0c5a9d2e48",
+                    "var_key": "theme",
+                    "var_value": "dark"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Delete all of a customer's variables",
+        "description": "**Scope:** `variables:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "deleted": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/{userId}/variables/{varKey}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/UserId"
+        },
+        {
+          "name": "varKey",
+          "in": "path",
+          "description": "Variable key, as stored. Case-sensitive.",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Variables"
+        ],
+        "summary": "Delete a customer variable",
+        "description": "**Scope:** `variables:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/webhooks": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhooks",
+        "description": "Paid plans only. **Scope:** `webhooks:read`",
+        "responses": {
+          "200": {
+            "description": "Webhooks.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "5d3e8b17-9c24-4a06-b7f5-1e8a2c6d40b9",
+                      "name": "Panel sync",
+                      "url": "https://panel.example.com/hooks/evora",
+                      "events": [
+                        "user.register",
+                        "license.used"
+                      ],
+                      "enabled": true
+                    }
+                  ],
+                  "total": 2,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Create a webhook",
+        "description": "Subscribe to `all` or to specific events. Note that `license.used` fires for\n**every** redemption path — loader, panel and Developer API — with a `source`\nfield identifying which. Guard against double-handling.\n\n**Scope:** `webhooks:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook"
+              },
+              "example": {
+                "name": "discord-relay",
+                "url": "https://lunar.com/hooks/evora",
+                "events": [
+                  "license.used",
+                  "user.banned"
+                ],
+                "enabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "webhook": {
+                    "id": "5d3e8b17-9c24-4a06-b7f5-1e8a2c6d40b9",
+                    "name": "Panel sync",
+                    "url": "https://panel.example.com/hooks/evora",
+                    "events": [
+                      "user.register",
+                      "license.used"
+                    ],
+                    "enabled": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/webhooks/{webhookId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "webhookId",
+          "in": "path",
+          "description": "Webhook UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Get a webhook",
+        "description": "**Scope:** `webhooks:read`",
+        "responses": {
+          "200": {
+            "description": "Webhook.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "webhook": {
+                    "id": "5d3e8b17-9c24-4a06-b7f5-1e8a2c6d40b9",
+                    "name": "Panel sync",
+                    "url": "https://panel.example.com/hooks/evora",
+                    "events": [
+                      "user.register",
+                      "license.used"
+                    ],
+                    "enabled": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Update a webhook",
+        "description": "**Scope:** `webhooks:write`",
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Delete a webhook",
+        "description": "**Scope:** `webhooks:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/webhooks/{webhookId}/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "webhookId",
+          "in": "path",
+          "description": "Webhook UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Fire a test delivery",
+        "description": "**Scope:** `webhooks:write`",
+        "responses": {
+          "200": {
+            "description": "Delivery result, including the endpoint's status code.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": true,
+                  "status": 204
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/blacklist": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "List blacklist entries",
+        "description": "**Scope:** `apps:read`",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Restrict to one entry kind.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hwid",
+                "ip",
+                "username"
+              ]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entries.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "c07a2f43-8e15-4b69-9d02-5a3c7e1f8b64",
+                      "blacklist_type": "hwid",
+                      "value": "A1B2-C3D4-E5F6",
+                      "reason": "Chargeback",
+                      "source": "manual",
+                      "created_at": "2026-07-22T13:05:31.000Z"
+                    }
+                  ],
+                  "total": 12,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "Add a blacklist entry",
+        "description": "**Scope:** `apps:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "hwid",
+                      "ip",
+                      "username"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "entry": {
+                    "id": "c07a2f43-8e15-4b69-9d02-5a3c7e1f8b64",
+                    "blacklist_type": "hwid",
+                    "value": "A1B2-C3D4-E5F6",
+                    "reason": "Chargeback",
+                    "source": "manual"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/blacklist/{entryId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "description": "Blacklist entry UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "Remove a blacklist entry",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/whitelist": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "List whitelist entries",
+        "description": "**Scope:** `apps:read`",
+        "responses": {
+          "200": {
+            "description": "Entries.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "e58b1d20-473c-4f8a-9016-2d7c5a0e3f91",
+                      "type": "ip",
+                      "ip": "203.0.113.24",
+                      "hwid": null,
+                      "note": "Office",
+                      "source": "manual"
+                    }
+                  ],
+                  "total": 2,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "Add a whitelist entry",
+        "description": "**Scope:** `apps:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ip",
+                      "hwid"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "entry": {
+                    "id": "e58b1d20-473c-4f8a-9016-2d7c5a0e3f91",
+                    "type": "ip",
+                    "ip": "203.0.113.24",
+                    "hwid": null,
+                    "note": "Office",
+                    "source": "manual"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/whitelist/{entryId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "description": "Whitelist entry UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Access control"
+        ],
+        "summary": "Remove a whitelist entry",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List live sessions",
+        "description": "Only sessions with a heartbeat in the last 2 minutes. **Scope:** `apps:read`",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "description": "Only sessions belonging to this end-user.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "f2a70c81-5b63-4e29-8d14-9c0b3e5a7d26",
+                      "user_id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                      "username": "ghost",
+                      "hwid": "A1B2-C3D4-E5F6",
+                      "ip_address": "203.0.113.24",
+                      "started_at": "2026-08-10T09:14:02.000Z",
+                      "last_heartbeat_at": "2026-08-10T09:41:55.000Z"
+                    }
+                  ],
+                  "total": 37,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 2
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sessions/{sessionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "sessionId",
+          "in": "path",
+          "description": "Session UUID. Deleting it ends the session; the SDK sees it gone on the next heartbeat.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Kill a session",
+        "description": "The SDK receives `action: kill` on its next heartbeat. **Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Killed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sessions/kill-all": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Kill every live session",
+        "description": "**Scope:** `apps:write`",
+        "responses": {
+          "200": {
+            "description": "Killed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "killed": 84
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/logs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "List logs",
+        "description": "**Scope:** `logs:read`",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Log action to filter on, e.g. `login`, `register`, `license_redeem`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "description": "Only entries produced by this end-user.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Inclusive lower bound, ISO 8601.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Inclusive upper bound, ISO 8601.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logs.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "8b4d1f60-2c97-4a35-be08-1f6a3d5c9027",
+                      "user_id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                      "action": "login",
+                      "metadata": {
+                        "success": true
+                      },
+                      "ip": "203.0.113.24",
+                      "hwid": "A1B2-C3D4-E5F6",
+                      "created_at": "2026-08-10T09:14:02.000Z"
+                    }
+                  ],
+                  "total": 9214,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 369
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/events": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "since",
+          "in": "query",
+          "description": "Cursor. Pass the `next_cursor` from your previous call. Exclusive, so you can store and resend it verbatim.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "description": "Maximum events to return in this page.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100
+          }
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "description": "Comma-separated event names to filter by.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Read the event stream (catch-up)",
+        "description": "Every event is recorded here **whether or not a webhook is configured**,\nso this is how you recover anything a webhook delivery missed.\n\nPoll it with a cursor instead of reconciling by walking your users: one\nrequest returns only what changed, rather than re-fetching every\nsubscription on a timer.\n\n```\nGET /apps/{appId}/events?since=10432&limit=100\n-> { events: [...], next_cursor: \"10530\", has_more: false }\n```\n\nOrder is by `seq`, a monotonic integer. Do not page by `created_at` —\ntwo events can share a millisecond and a clock adjustment can make a\ntimestamp cursor skip or repeat rows.\n\nEvents age out on the platform retention window (90 days by default).\n\n**Scope:** `logs:read`\n",
+        "responses": {
+          "200": {
+            "description": "Events in ascending cursor order.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "events": [
+                    {
+                      "id": "b1c2...",
+                      "seq": "10530",
+                      "type": "subscription.extended",
+                      "payload": {
+                        "event": "subscription.extended",
+                        "user_id": "4a28...",
+                        "expiry": "2026-10-01T00:00:00.000Z"
+                      },
+                      "created_at": "2026-08-06T19:44:02.113Z"
+                    }
+                  ],
+                  "next_cursor": "10530",
+                  "has_more": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`since` was not a numeric cursor.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "since must be a numeric cursor returned as next_cursor",
+                  "code": "INVALID_CURSOR"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/apps/{appId}/logs/stats": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "description": "Window length in days, counting back from today.",
+          "schema": {
+            "type": "integer",
+            "default": 30
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "Log statistics",
+        "description": "**Scope:** `logs:read`",
+        "responses": {
+          "200": {
+            "description": "Stats.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "stats": {
+                    "total": 9214,
+                    "byType": {
+                      "login": 7401,
+                      "register": 512,
+                      "license_redeem": 1301
+                    },
+                    "byDay": [
+                      {
+                        "date": "2026-08-08",
+                        "count": 331
+                      },
+                      {
+                        "date": "2026-08-09",
+                        "count": 298
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sellers": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "List sellers",
+        "description": "Paid plans only. **Scope:** `sellers:read`",
+        "responses": {
+          "200": {
+            "description": "Sellers.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "sellers": [
+                    {
+                      "id": "6c9e2a74-1f58-4b03-9d76-4a1c8e5b2073",
+                      "username": "reseller_one",
+                      "balance_day": 10,
+                      "balance_week": 4,
+                      "balance_month": 2,
+                      "balance_lifetime": 0,
+                      "key_levels": "1,2",
+                      "can_create_licenses": true,
+                      "max_licenses": 500,
+                      "licenses_created": 118,
+                      "enabled": true,
+                      "expires_at": "2026-12-01T00:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "Create a seller",
+        "description": "**Scope:** `sellers:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "balance": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    }
+                  },
+                  "keyLevels": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canCreateLicenses": {
+                    "type": "boolean"
+                  },
+                  "maxLicenses": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "When this seller loses access. `null` (or omitted) means\nlifetime. Enforced at every gate — an expired seller cannot\nsign in, use the reseller API, or mint licences, and gets\n`seller_expired` rather than `seller_disabled` so a shop can\ntell a lapsed renewal apart from a suspension.\n"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "seller": {
+                    "id": "6c9e2a74-1f58-4b03-9d76-4a1c8e5b2073",
+                    "username": "reseller_one",
+                    "balance_day": 10,
+                    "balance_week": 4,
+                    "balance_month": 2,
+                    "balance_lifetime": 0,
+                    "key_levels": "1,2",
+                    "can_create_licenses": true,
+                    "max_licenses": 500,
+                    "licenses_created": 118,
+                    "enabled": true,
+                    "expires_at": "2026-12-01T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sellers/{sellerId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "sellerId",
+          "in": "path",
+          "description": "Seller UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "Get a seller",
+        "description": "**Scope:** `sellers:read`",
+        "responses": {
+          "200": {
+            "description": "Seller.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "seller": {
+                    "id": "6c9e2a74-1f58-4b03-9d76-4a1c8e5b2073",
+                    "username": "reseller_one",
+                    "balance_day": 10,
+                    "balance_week": 4,
+                    "balance_month": 2,
+                    "balance_lifetime": 0,
+                    "key_levels": "1,2",
+                    "can_create_licenses": true,
+                    "max_licenses": 500,
+                    "licenses_created": 118,
+                    "enabled": true,
+                    "expires_at": "2026-12-01T00:00:00.000Z"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "Update a seller",
+        "description": "Every field is optional; omitted fields are left as they are.\n\n**Scope:** `sellers:write`\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Rotating the password also unlinks the seller from any\nmulti-panel identity, so the change actually locks them out\nrather than leaving identity-login as a way back in.\n"
+                  },
+                  "balance": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    }
+                  },
+                  "keyLevels": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "canCreateLicenses": {
+                    "type": "boolean"
+                  },
+                  "maxLicenses": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "New expiry instant. `null` clears it back to lifetime;\nomitting the field leaves the current expiry untouched.\n"
+                  }
+                }
+              },
+              "example": {
+                "expiresAt": "2026-12-01T00:00:00.000Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "Delete a seller",
+        "description": "**Scope:** `sellers:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Seller deleted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/sellers/{sellerId}/balance": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "sellerId",
+          "in": "path",
+          "description": "Seller UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Sellers"
+        ],
+        "summary": "Add seller balance",
+        "description": "Balance is per key-duration bucket. **Scope:** `sellers:write`",
+        "responses": {
+          "200": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients": {
+      "get": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "List clients",
+        "description": "Sub-accounts you grant per-application management access. **Scope:** `sellers:read`",
+        "responses": {
+          "200": {
+            "description": "Clients.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "clients": [
+                    {
+                      "id": "2d6b9f38-7a41-4c05-8e93-5b0d1a7c6e24",
+                      "username": "acme-panel",
+                      "enabled": true
+                    }
+                  ],
+                  "total": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Create a client",
+        "description": "**Scope:** `sellers:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "client": {
+                    "id": "2d6b9f38-7a41-4c05-8e93-5b0d1a7c6e24",
+                    "username": "acme-panel",
+                    "enabled": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients/{clientId}": {
+      "parameters": [
+        {
+          "name": "clientId",
+          "in": "path",
+          "required": true,
+          "description": "Client UUID.",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Update a client",
+        "description": "**Scope:** `sellers:write`",
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Delete a client",
+        "description": "**Scope:** `sellers:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Client deleted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients/{clientId}/apps": {
+      "parameters": [
+        {
+          "name": "clientId",
+          "in": "path",
+          "required": true,
+          "description": "Client UUID.",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "List a client's application access",
+        "description": "**Scope:** `sellers:read`",
+        "responses": {
+          "200": {
+            "description": "Applications.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "apps": [
+                    {
+                      "id": "3f7b1d90-24c8-4a1e-9b63-0e5a8c2d7f11",
+                      "name": "Lunar"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Grant application access",
+        "description": "**Scope:** `sellers:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "appId"
+                ],
+                "properties": {
+                  "appId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "canManageResellers": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Granted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients/{clientId}/apps/{appId}": {
+      "parameters": [
+        {
+          "name": "clientId",
+          "in": "path",
+          "description": "Client UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Revoke application access",
+        "description": "**Scope:** `sellers:write`",
+        "responses": {
+          "200": {
+            "description": "Revoked.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/entitlements": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "List entitlements",
+        "description": "**Scope:** `entitlements:read`",
+        "responses": {
+          "200": {
+            "description": "Entitlements.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": "a5c81e70-3b29-4f64-9017-8d2e6a4c5b93",
+                      "code": "premium_maps",
+                      "name": "Premium maps",
+                      "description": "Unlocks the paid map pack",
+                      "consumable": false,
+                      "max_consumption": null
+                    }
+                  ],
+                  "total": 4,
+                  "page": 1,
+                  "limit": 25,
+                  "totalPages": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "Create an entitlement",
+        "description": "**Scope:** `entitlements:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "name"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "consumable": {
+                    "type": "boolean"
+                  },
+                  "max_consumption": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "example": {
+                "code": "aimbot",
+                "name": "Aimbot module",
+                "consumable": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "entitlement": {
+                    "id": "a5c81e70-3b29-4f64-9017-8d2e6a4c5b93",
+                    "code": "premium_maps",
+                    "name": "Premium maps",
+                    "description": "Unlocks the paid map pack",
+                    "consumable": false,
+                    "max_consumption": null
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/entitlements/{entitlementId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "entitlementId",
+          "in": "path",
+          "description": "Entitlement UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "Update an entitlement",
+        "description": "**Scope:** `entitlements:write`",
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "Delete an entitlement",
+        "description": "**Scope:** `entitlements:write`",
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/subscriptions/{subscriptionId}/entitlements": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "subscriptionId",
+          "in": "path",
+          "description": "Subscription tier UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "List entitlements attached to a tier",
+        "description": "**Scope:** `entitlements:read`",
+        "responses": {
+          "200": {
+            "description": "Entitlements.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "entitlements": [
+                    {
+                      "id": "a5c81e70-3b29-4f64-9017-8d2e6a4c5b93",
+                      "code": "premium_maps",
+                      "name": "Premium maps"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "Attach an entitlement to a tier",
+        "description": "**Scope:** `entitlements:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "entitlement_id"
+                ],
+                "properties": {
+                  "entitlement_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Attached.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/{userId}/entitlements": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Entitlements"
+        ],
+        "summary": "Resolve a customer's entitlements",
+        "description": "**Scope:** `entitlements:read`",
+        "responses": {
+          "200": {
+            "description": "Entitlements.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "entitlements": [
+                    {
+                      "id": "a5c81e70-3b29-4f64-9017-8d2e6a4c5b93",
+                      "code": "premium_maps",
+                      "name": "Premium maps"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/geo-rules": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Geo"
+        ],
+        "summary": "List geo rules",
+        "description": "**Scope:** `geo:read`",
+        "responses": {
+          "200": {
+            "description": "Rules.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "rules": [
+                    {
+                      "id": "4e0a7c95-6d13-482b-b7f0-9a5c2e8d1046",
+                      "rule_type": "block",
+                      "value": "RU",
+                      "note": "Sanctions"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Geo"
+        ],
+        "summary": "Add a geo rule",
+        "description": "**Scope:** `geo:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rule_type",
+                  "value"
+                ],
+                "properties": {
+                  "rule_type": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "block"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "ISO country code."
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "rule_type": "block",
+                "value": "RU"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "rule": {
+                    "id": "4e0a7c95-6d13-482b-b7f0-9a5c2e8d1046",
+                    "rule_type": "block",
+                    "value": "RU",
+                    "note": "Sanctions"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/geo-rules/{ruleId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "ruleId",
+          "in": "path",
+          "description": "Geo rule UUID.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Geo"
+        ],
+        "summary": "Remove a geo rule",
+        "description": "**Scope:** `geo:write`",
+        "responses": {
+          "200": {
+            "description": "Removed.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/geo-enabled": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "put": {
+        "tags": [
+          "Geo"
+        ],
+        "summary": "Enable or disable geo restrictions",
+        "description": "**Scope:** `geo:write`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/floating/leases": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Floating licenses"
+        ],
+        "summary": "List active leases",
+        "description": "**Scope:** `floating:read`",
+        "responses": {
+          "200": {
+            "description": "Leases.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "leases": [
+                    {
+                      "id": "b73f2e18-4a90-4c56-8d21-7e6b0a3c9f45",
+                      "user_id": "9c1f0b2e-3a5d-4c88-9f21-7d4e6b0a1c33",
+                      "username": "ghost",
+                      "hwid": "A1B2-C3D4-E5F6",
+                      "acquired_at": "2026-08-10T09:14:02.000Z",
+                      "expires_at": "2026-08-10T09:44:02.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/floating/leases/{leaseId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "name": "leaseId",
+          "in": "path",
+          "description": "Lease UUID. Revoking frees the seat immediately.",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "Floating licenses"
+        ],
+        "summary": "Revoke a lease",
+        "description": "Frees the seat immediately. **Scope:** `floating:write`",
+        "responses": {
+          "200": {
+            "description": "Revoked.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apps/{appId}/users/{userId}/floating/seats": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AppId"
+        },
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Floating licenses"
+        ],
+        "summary": "Seat usage for a customer",
+        "description": "**Scope:** `floating:read`",
+        "responses": {
+          "200": {
+            "description": "Seat info.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "total": 3,
+                  "used": 1,
+                  "available": 2
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

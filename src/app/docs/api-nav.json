@@ -1,0 +1,766 @@
+{
+  "groups": [
+    {
+      "title": "Quota",
+      "description": "Plan limits and current usage.",
+      "links": [
+        {
+          "id": "api-get-quota",
+          "label": "Plan quota and current usage",
+          "method": "GET",
+          "path": "/quota"
+        }
+      ]
+    },
+    {
+      "title": "Applications",
+      "description": "Create and configure applications.",
+      "links": [
+        {
+          "id": "api-get-apps",
+          "label": "List applications",
+          "method": "GET",
+          "path": "/apps"
+        },
+        {
+          "id": "api-post-apps",
+          "label": "Create an application",
+          "method": "POST",
+          "path": "/apps"
+        },
+        {
+          "id": "api-get-apps-appid",
+          "label": "Get an application",
+          "method": "GET",
+          "path": "/apps/{appId}"
+        },
+        {
+          "id": "api-put-apps-appid",
+          "label": "Update an application",
+          "method": "PUT",
+          "path": "/apps/{appId}"
+        },
+        {
+          "id": "api-delete-apps-appid",
+          "label": "Delete an application",
+          "method": "DELETE",
+          "path": "/apps/{appId}"
+        }
+      ]
+    },
+    {
+      "title": "Statistics",
+      "description": "Aggregate analytics for dashboards.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-stats",
+          "label": "Application statistics",
+          "method": "GET",
+          "path": "/apps/{appId}/stats"
+        },
+        {
+          "id": "api-get-apps-appid-stats-overview",
+          "label": "Extended overview",
+          "method": "GET",
+          "path": "/apps/{appId}/stats/overview"
+        },
+        {
+          "id": "api-get-apps-appid-stats-logins",
+          "label": "Login activity by day",
+          "method": "GET",
+          "path": "/apps/{appId}/stats/logins"
+        },
+        {
+          "id": "api-get-apps-appid-stats-users",
+          "label": "User growth over time",
+          "method": "GET",
+          "path": "/apps/{appId}/stats/users"
+        },
+        {
+          "id": "api-get-apps-appid-stats-licenses",
+          "label": "License status breakdown",
+          "method": "GET",
+          "path": "/apps/{appId}/stats/licenses"
+        },
+        {
+          "id": "api-get-apps-appid-stats-sessions",
+          "label": "Session trends",
+          "method": "GET",
+          "path": "/apps/{appId}/stats/sessions"
+        }
+      ]
+    },
+    {
+      "title": "Licenses",
+      "description": "Generate, manage and authenticate license keys.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-licenses",
+          "label": "List licenses",
+          "method": "GET",
+          "path": "/apps/{appId}/licenses"
+        },
+        {
+          "id": "api-post-apps-appid-licenses",
+          "label": "Generate licenses",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses"
+        },
+        {
+          "id": "api-get-apps-appid-licenses-licenseid",
+          "label": "Get a license",
+          "method": "GET",
+          "path": "/apps/{appId}/licenses/{licenseId}"
+        },
+        {
+          "id": "api-put-apps-appid-licenses-licenseid",
+          "label": "Update a license",
+          "method": "PUT",
+          "path": "/apps/{appId}/licenses/{licenseId}"
+        },
+        {
+          "id": "api-delete-apps-appid-licenses-licenseid",
+          "label": "Delete a license",
+          "method": "DELETE",
+          "path": "/apps/{appId}/licenses/{licenseId}"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-ban",
+          "label": "Ban a license",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/ban"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-unban",
+          "label": "Unban a license",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/unban"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-reset-hwid",
+          "label": "Reset a license HWID",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/reset-hwid"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-pause",
+          "label": "Freeze a license",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/pause"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-unpause",
+          "label": "Resume a frozen license",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/unpause"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-licenseid-expiry",
+          "label": "Adjust license expiry by a signed delta",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/{licenseId}/expiry"
+        },
+        {
+          "id": "api-post-apps-appid-licenses-bulk",
+          "label": "Bulk license actions",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/bulk"
+        }
+      ]
+    },
+    {
+      "title": "Users",
+      "description": "End-user accounts (your customers).",
+      "links": [
+        {
+          "id": "api-get-apps-appid-users-lookup",
+          "label": "Look up a customer by username",
+          "method": "GET",
+          "path": "/apps/{appId}/users/lookup"
+        },
+        {
+          "id": "api-get-users",
+          "label": "List customers",
+          "method": "GET",
+          "path": "/users"
+        },
+        {
+          "id": "api-post-users",
+          "label": "Create a customer",
+          "method": "POST",
+          "path": "/users"
+        },
+        {
+          "id": "api-get-users-userid",
+          "label": "Get a customer",
+          "method": "GET",
+          "path": "/users/{userId}"
+        },
+        {
+          "id": "api-put-users-userid",
+          "label": "Update a customer",
+          "method": "PUT",
+          "path": "/users/{userId}"
+        },
+        {
+          "id": "api-delete-users-userid",
+          "label": "Delete a customer",
+          "method": "DELETE",
+          "path": "/users/{userId}"
+        },
+        {
+          "id": "api-post-users-userid-password-reset",
+          "label": "Mint a password-reset token",
+          "method": "POST",
+          "path": "/users/{userId}/password-reset"
+        },
+        {
+          "id": "api-post-password-reset-fulfil",
+          "label": "Consume a reset token and set the new password",
+          "method": "POST",
+          "path": "/password-reset/fulfil"
+        },
+        {
+          "id": "api-post-users-userid-ban",
+          "label": "Ban a customer",
+          "method": "POST",
+          "path": "/users/{userId}/ban"
+        },
+        {
+          "id": "api-post-users-userid-unban",
+          "label": "Unban a customer",
+          "method": "POST",
+          "path": "/users/{userId}/unban"
+        },
+        {
+          "id": "api-post-users-userid-reset-hwid",
+          "label": "Reset a customer's HWID",
+          "method": "POST",
+          "path": "/users/{userId}/reset-hwid"
+        },
+        {
+          "id": "api-get-users-userid-2fa",
+          "label": "Read a customer's two-factor state",
+          "method": "GET",
+          "path": "/users/{userId}/2fa"
+        },
+        {
+          "id": "api-delete-users-userid-2fa",
+          "label": "Reset a customer's two-factor authentication",
+          "method": "DELETE",
+          "path": "/users/{userId}/2fa"
+        },
+        {
+          "id": "api-post-users-userid-reset-device",
+          "label": "Reset a customer's device binding",
+          "method": "POST",
+          "path": "/users/{userId}/reset-device"
+        },
+        {
+          "id": "api-post-users-userid-issue-session-token",
+          "label": "Mint a one-time SDK login token (panel SSO)",
+          "method": "POST",
+          "path": "/users/{userId}/issue-session-token"
+        },
+        {
+          "id": "api-post-users-userid-redeem",
+          "label": "Redeem a license key on a customer's behalf",
+          "method": "POST",
+          "path": "/users/{userId}/redeem"
+        },
+        {
+          "id": "api-post-users-bulk",
+          "label": "Bulk customer actions",
+          "method": "POST",
+          "path": "/users/bulk"
+        }
+      ]
+    },
+    {
+      "title": "Authentication",
+      "description": "Verify a customer's credentials or license key from your own panel.",
+      "links": [
+        {
+          "id": "api-post-apps-appid-licenses-authenticate",
+          "label": "Authenticate a customer by license key",
+          "method": "POST",
+          "path": "/apps/{appId}/licenses/authenticate"
+        },
+        {
+          "id": "api-post-apps-appid-users-authenticate",
+          "label": "Authenticate a customer by username and password",
+          "method": "POST",
+          "path": "/apps/{appId}/users/authenticate"
+        }
+      ]
+    },
+    {
+      "title": "Subscriptions",
+      "description": "A user's entitlement to an application, including freeze/resume.",
+      "links": [
+        {
+          "id": "api-get-users-userid-subscriptions",
+          "label": "List a customer's subscriptions",
+          "method": "GET",
+          "path": "/users/{userId}/subscriptions"
+        },
+        {
+          "id": "api-post-users-userid-subscriptions",
+          "label": "Grant a subscription directly",
+          "method": "POST",
+          "path": "/users/{userId}/subscriptions"
+        },
+        {
+          "id": "api-delete-users-userid-subscriptions-appid",
+          "label": "Remove a subscription",
+          "method": "DELETE",
+          "path": "/users/{userId}/subscriptions/{appId}"
+        },
+        {
+          "id": "api-post-users-userid-subscriptions-appid-pause",
+          "label": "Freeze a subscription",
+          "method": "POST",
+          "path": "/users/{userId}/subscriptions/{appId}/pause"
+        },
+        {
+          "id": "api-post-users-userid-subscriptions-appid-unpause",
+          "label": "Resume a frozen subscription",
+          "method": "POST",
+          "path": "/users/{userId}/subscriptions/{appId}/unpause"
+        },
+        {
+          "id": "api-post-users-userid-subscriptions-extend",
+          "label": "Extend a subscription by days",
+          "method": "POST",
+          "path": "/users/{userId}/subscriptions/extend"
+        }
+      ]
+    },
+    {
+      "title": "Subscription tiers",
+      "description": "The named levels an application offers.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-subscriptions",
+          "label": "List tiers",
+          "method": "GET",
+          "path": "/apps/{appId}/subscriptions"
+        },
+        {
+          "id": "api-post-apps-appid-subscriptions",
+          "label": "Create a tier",
+          "method": "POST",
+          "path": "/apps/{appId}/subscriptions"
+        },
+        {
+          "id": "api-put-apps-appid-subscriptions-subscriptionid",
+          "label": "Update a tier",
+          "method": "PUT",
+          "path": "/apps/{appId}/subscriptions/{subscriptionId}"
+        },
+        {
+          "id": "api-delete-apps-appid-subscriptions-subscriptionid",
+          "label": "Delete a tier",
+          "method": "DELETE",
+          "path": "/apps/{appId}/subscriptions/{subscriptionId}"
+        }
+      ]
+    },
+    {
+      "title": "Variables",
+      "description": "App-wide and per-user key/value storage readable by the SDK.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-variables",
+          "label": "List app variables",
+          "method": "GET",
+          "path": "/apps/{appId}/variables"
+        },
+        {
+          "id": "api-post-apps-appid-variables",
+          "label": "Create or update a variable",
+          "method": "POST",
+          "path": "/apps/{appId}/variables"
+        },
+        {
+          "id": "api-delete-apps-appid-variables",
+          "label": "Delete all app variables",
+          "method": "DELETE",
+          "path": "/apps/{appId}/variables"
+        },
+        {
+          "id": "api-get-apps-appid-variables-key",
+          "label": "Get a variable",
+          "method": "GET",
+          "path": "/apps/{appId}/variables/{key}"
+        },
+        {
+          "id": "api-put-apps-appid-variables-key",
+          "label": "Update a variable",
+          "method": "PUT",
+          "path": "/apps/{appId}/variables/{key}"
+        },
+        {
+          "id": "api-delete-apps-appid-variables-key",
+          "label": "Delete a variable",
+          "method": "DELETE",
+          "path": "/apps/{appId}/variables/{key}"
+        },
+        {
+          "id": "api-get-apps-appid-user-variables",
+          "label": "List every user variable in the application",
+          "method": "GET",
+          "path": "/apps/{appId}/user-variables"
+        },
+        {
+          "id": "api-get-apps-appid-users-userid-variables",
+          "label": "List one customer's variables",
+          "method": "GET",
+          "path": "/apps/{appId}/users/{userId}/variables"
+        },
+        {
+          "id": "api-post-apps-appid-users-userid-variables",
+          "label": "Set a customer variable",
+          "method": "POST",
+          "path": "/apps/{appId}/users/{userId}/variables"
+        },
+        {
+          "id": "api-delete-apps-appid-users-userid-variables",
+          "label": "Delete all of a customer's variables",
+          "method": "DELETE",
+          "path": "/apps/{appId}/users/{userId}/variables"
+        },
+        {
+          "id": "api-delete-apps-appid-users-userid-variables-varkey",
+          "label": "Delete a customer variable",
+          "method": "DELETE",
+          "path": "/apps/{appId}/users/{userId}/variables/{varKey}"
+        }
+      ]
+    },
+    {
+      "title": "Webhooks",
+      "description": "Outbound event delivery, plus the event stream that backs it.\n\n**Verify every payload.** If the webhook has a secret, each request carries\n`X-Evora-Timestamp` and `X-Evora-Signature`, where the signature is\n`HMAC_SHA256(secret, timestamp + \".\" + rawBody)` as lowercase hex. Compute\nit over the RAW body before JSON parsing, compare with a constant-time\nfunction, and reject anything whose timestamp is far from now. An endpoint\nthat skips this can be driven by anyone who learns its URL.\n\n**Deduplicate on `X-Evora-Event-Id`.** Retries reuse the same id, so\nrecording processed ids is what keeps a redelivery from granting twice.\n`X-Evora-Delivery-Attempt` tells you which try you are receiving.\n\n**Delivery is at-least-once, not guaranteed.** A non-2xx response is\nretried with exponential backoff — 6 attempts across roughly two hours —\nafter which the event is left in the stream and not retried again. An\nendpoint that keeps failing is auto-disabled and the developer notified.\n\nThe retry window is deliberately short: enforcement is pull-based, so a\nmissed webhook can never grant or extend access. For anything longer than\na brief outage, read `GET /apps/{appId}/events?since=` — that is the\ndurable path, and it works even with no webhook configured.\n",
+      "links": [
+        {
+          "id": "api-get-apps-appid-webhooks",
+          "label": "List webhooks",
+          "method": "GET",
+          "path": "/apps/{appId}/webhooks"
+        },
+        {
+          "id": "api-post-apps-appid-webhooks",
+          "label": "Create a webhook",
+          "method": "POST",
+          "path": "/apps/{appId}/webhooks"
+        },
+        {
+          "id": "api-get-apps-appid-webhooks-webhookid",
+          "label": "Get a webhook",
+          "method": "GET",
+          "path": "/apps/{appId}/webhooks/{webhookId}"
+        },
+        {
+          "id": "api-put-apps-appid-webhooks-webhookid",
+          "label": "Update a webhook",
+          "method": "PUT",
+          "path": "/apps/{appId}/webhooks/{webhookId}"
+        },
+        {
+          "id": "api-delete-apps-appid-webhooks-webhookid",
+          "label": "Delete a webhook",
+          "method": "DELETE",
+          "path": "/apps/{appId}/webhooks/{webhookId}"
+        },
+        {
+          "id": "api-post-apps-appid-webhooks-webhookid-test",
+          "label": "Fire a test delivery",
+          "method": "POST",
+          "path": "/apps/{appId}/webhooks/{webhookId}/test"
+        },
+        {
+          "id": "api-get-apps-appid-events",
+          "label": "Read the event stream (catch-up)",
+          "method": "GET",
+          "path": "/apps/{appId}/events"
+        }
+      ]
+    },
+    {
+      "title": "Access control",
+      "description": "Blacklist and whitelist entries.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-blacklist",
+          "label": "List blacklist entries",
+          "method": "GET",
+          "path": "/apps/{appId}/blacklist"
+        },
+        {
+          "id": "api-post-apps-appid-blacklist",
+          "label": "Add a blacklist entry",
+          "method": "POST",
+          "path": "/apps/{appId}/blacklist"
+        },
+        {
+          "id": "api-delete-apps-appid-blacklist-entryid",
+          "label": "Remove a blacklist entry",
+          "method": "DELETE",
+          "path": "/apps/{appId}/blacklist/{entryId}"
+        },
+        {
+          "id": "api-get-apps-appid-whitelist",
+          "label": "List whitelist entries",
+          "method": "GET",
+          "path": "/apps/{appId}/whitelist"
+        },
+        {
+          "id": "api-post-apps-appid-whitelist",
+          "label": "Add a whitelist entry",
+          "method": "POST",
+          "path": "/apps/{appId}/whitelist"
+        },
+        {
+          "id": "api-delete-apps-appid-whitelist-entryid",
+          "label": "Remove a whitelist entry",
+          "method": "DELETE",
+          "path": "/apps/{appId}/whitelist/{entryId}"
+        }
+      ]
+    },
+    {
+      "title": "Sessions",
+      "description": "Live SDK sessions.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-sessions",
+          "label": "List live sessions",
+          "method": "GET",
+          "path": "/apps/{appId}/sessions"
+        },
+        {
+          "id": "api-delete-apps-appid-sessions-sessionid",
+          "label": "Kill a session",
+          "method": "DELETE",
+          "path": "/apps/{appId}/sessions/{sessionId}"
+        },
+        {
+          "id": "api-post-apps-appid-sessions-kill-all",
+          "label": "Kill every live session",
+          "method": "POST",
+          "path": "/apps/{appId}/sessions/kill-all"
+        }
+      ]
+    },
+    {
+      "title": "Logs",
+      "description": "Authentication and event history.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-logs",
+          "label": "List logs",
+          "method": "GET",
+          "path": "/apps/{appId}/logs"
+        },
+        {
+          "id": "api-get-apps-appid-logs-stats",
+          "label": "Log statistics",
+          "method": "GET",
+          "path": "/apps/{appId}/logs/stats"
+        }
+      ]
+    },
+    {
+      "title": "Sellers",
+      "description": "Reseller accounts.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-sellers",
+          "label": "List sellers",
+          "method": "GET",
+          "path": "/apps/{appId}/sellers"
+        },
+        {
+          "id": "api-post-apps-appid-sellers",
+          "label": "Create a seller",
+          "method": "POST",
+          "path": "/apps/{appId}/sellers"
+        },
+        {
+          "id": "api-get-apps-appid-sellers-sellerid",
+          "label": "Get a seller",
+          "method": "GET",
+          "path": "/apps/{appId}/sellers/{sellerId}"
+        },
+        {
+          "id": "api-put-apps-appid-sellers-sellerid",
+          "label": "Update a seller",
+          "method": "PUT",
+          "path": "/apps/{appId}/sellers/{sellerId}"
+        },
+        {
+          "id": "api-delete-apps-appid-sellers-sellerid",
+          "label": "Delete a seller",
+          "method": "DELETE",
+          "path": "/apps/{appId}/sellers/{sellerId}"
+        },
+        {
+          "id": "api-post-apps-appid-sellers-sellerid-balance",
+          "label": "Add seller balance",
+          "method": "POST",
+          "path": "/apps/{appId}/sellers/{sellerId}/balance"
+        }
+      ]
+    },
+    {
+      "title": "Clients",
+      "description": "Sub-accounts you grant per-application management access.",
+      "links": [
+        {
+          "id": "api-get-clients",
+          "label": "List clients",
+          "method": "GET",
+          "path": "/clients"
+        },
+        {
+          "id": "api-post-clients",
+          "label": "Create a client",
+          "method": "POST",
+          "path": "/clients"
+        },
+        {
+          "id": "api-put-clients-clientid",
+          "label": "Update a client",
+          "method": "PUT",
+          "path": "/clients/{clientId}"
+        },
+        {
+          "id": "api-delete-clients-clientid",
+          "label": "Delete a client",
+          "method": "DELETE",
+          "path": "/clients/{clientId}"
+        },
+        {
+          "id": "api-get-clients-clientid-apps",
+          "label": "List a client's application access",
+          "method": "GET",
+          "path": "/clients/{clientId}/apps"
+        },
+        {
+          "id": "api-post-clients-clientid-apps",
+          "label": "Grant application access",
+          "method": "POST",
+          "path": "/clients/{clientId}/apps"
+        },
+        {
+          "id": "api-delete-clients-clientid-apps-appid",
+          "label": "Revoke application access",
+          "method": "DELETE",
+          "path": "/clients/{clientId}/apps/{appId}"
+        }
+      ]
+    },
+    {
+      "title": "Entitlements",
+      "description": "Fine-grained feature flags attached to tiers or users.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-entitlements",
+          "label": "List entitlements",
+          "method": "GET",
+          "path": "/apps/{appId}/entitlements"
+        },
+        {
+          "id": "api-post-apps-appid-entitlements",
+          "label": "Create an entitlement",
+          "method": "POST",
+          "path": "/apps/{appId}/entitlements"
+        },
+        {
+          "id": "api-put-apps-appid-entitlements-entitlementid",
+          "label": "Update an entitlement",
+          "method": "PUT",
+          "path": "/apps/{appId}/entitlements/{entitlementId}"
+        },
+        {
+          "id": "api-delete-apps-appid-entitlements-entitlementid",
+          "label": "Delete an entitlement",
+          "method": "DELETE",
+          "path": "/apps/{appId}/entitlements/{entitlementId}"
+        },
+        {
+          "id": "api-get-apps-appid-subscriptions-subscriptionid-entitlements",
+          "label": "List entitlements attached to a tier",
+          "method": "GET",
+          "path": "/apps/{appId}/subscriptions/{subscriptionId}/entitlements"
+        },
+        {
+          "id": "api-post-apps-appid-subscriptions-subscriptionid-entitlements",
+          "label": "Attach an entitlement to a tier",
+          "method": "POST",
+          "path": "/apps/{appId}/subscriptions/{subscriptionId}/entitlements"
+        },
+        {
+          "id": "api-get-apps-appid-users-userid-entitlements",
+          "label": "Resolve a customer's entitlements",
+          "method": "GET",
+          "path": "/apps/{appId}/users/{userId}/entitlements"
+        }
+      ]
+    },
+    {
+      "title": "Geo",
+      "description": "Country-level access rules.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-geo-rules",
+          "label": "List geo rules",
+          "method": "GET",
+          "path": "/apps/{appId}/geo-rules"
+        },
+        {
+          "id": "api-post-apps-appid-geo-rules",
+          "label": "Add a geo rule",
+          "method": "POST",
+          "path": "/apps/{appId}/geo-rules"
+        },
+        {
+          "id": "api-delete-apps-appid-geo-rules-ruleid",
+          "label": "Remove a geo rule",
+          "method": "DELETE",
+          "path": "/apps/{appId}/geo-rules/{ruleId}"
+        },
+        {
+          "id": "api-put-apps-appid-geo-enabled",
+          "label": "Enable or disable geo restrictions",
+          "method": "PUT",
+          "path": "/apps/{appId}/geo-enabled"
+        }
+      ]
+    },
+    {
+      "title": "Floating licenses",
+      "description": "Concurrent-seat leases.",
+      "links": [
+        {
+          "id": "api-get-apps-appid-floating-leases",
+          "label": "List active leases",
+          "method": "GET",
+          "path": "/apps/{appId}/floating/leases"
+        },
+        {
+          "id": "api-delete-apps-appid-floating-leases-leaseid",
+          "label": "Revoke a lease",
+          "method": "DELETE",
+          "path": "/apps/{appId}/floating/leases/{leaseId}"
+        },
+        {
+          "id": "api-get-apps-appid-users-userid-floating-seats",
+          "label": "Seat usage for a customer",
+          "method": "GET",
+          "path": "/apps/{appId}/users/{userId}/floating/seats"
+        }
+      ]
+    }
+  ]
+}

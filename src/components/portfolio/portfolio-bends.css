@@ -1,0 +1,59 @@
+#portfolio-root {
+  isolation: isolate;
+}
+
+.pf-bends {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: clamp(760px, 135vh, 1400px);
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 44%,
+    rgba(0, 0, 0, 0.972) 49.6%,
+    rgba(0, 0, 0, 0.896) 55.2%,
+    rgba(0, 0, 0, 0.784) 60.8%,
+    rgba(0, 0, 0, 0.648) 66.4%,
+    rgba(0, 0, 0, 0.5) 72%,
+    rgba(0, 0, 0, 0.352) 77.6%,
+    rgba(0, 0, 0, 0.216) 83.2%,
+    rgba(0, 0, 0, 0.104) 88.8%,
+    rgba(0, 0, 0, 0.028) 94.4%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 44%,
+    rgba(0, 0, 0, 0.972) 49.6%,
+    rgba(0, 0, 0, 0.896) 55.2%,
+    rgba(0, 0, 0, 0.784) 60.8%,
+    rgba(0, 0, 0, 0.648) 66.4%,
+    rgba(0, 0, 0, 0.5) 72%,
+    rgba(0, 0, 0, 0.352) 77.6%,
+    rgba(0, 0, 0, 0.216) 83.2%,
+    rgba(0, 0, 0, 0.104) 88.8%,
+    rgba(0, 0, 0, 0.028) 94.4%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.pf-bends-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 50%;
+  transform: scale(2);
+  transform-origin: top left;
+}
+
+.pf-root[data-theme="light"] .pf-bends {
+  display: none;
+}

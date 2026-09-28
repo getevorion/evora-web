@@ -1,0 +1,398 @@
+.hero-frame-buffer:has(.mac) {
+  margin-top: -10px;
+}
+
+.mac {
+
+  width: min(
+    1180px,
+    calc(100vw - 2 * var(--frame-buffer, 60px)),
+    calc((100vh - 302px) / 0.656)
+  );
+  margin: 0 auto;
+  position: relative;
+  container-type: inline-size;
+  isolation: isolate;
+
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 92%, transparent 100%);
+  user-select: none;
+}
+
+.lap-callout {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 12px));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  color: var(--ev-text-quaternary, rgba(255, 255, 255, 0.5));
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.16s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.lap-callout:hover {
+  color: #f7f8f8;
+}
+[data-theme="light"] .lap-callout:hover {
+  color: var(--text);
+}
+
+.lap-lid {
+  position: relative;
+  overflow: hidden;
+
+  border-radius: 2.4cqw 2.4cqw 0 0;
+  padding: 0.28cqw;
+
+  background:
+    linear-gradient(
+      rgba(9, 10, 11, var(--lap-shade, 0)),
+      rgba(9, 10, 11, var(--lap-shade, 0))
+    ),
+    linear-gradient(
+      180deg,
+      #5a5d63 0%,
+      #3a3c41 34%,
+      #292b2e 72%,
+      #34363a 100%
+    );
+
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, calc(0.06 * (1 - var(--lap-shade, 0)))),
+    0 60px 110px -45px rgba(0, 0, 0, 0.8),
+    0 26px 60px -34px rgba(0, 0, 0, 0.6);
+}
+
+.lap-shine-group {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.lap-shine {
+  position: absolute;
+  inset: 0;
+
+  border: 1px solid var(--ev-shine-beam, rgb(154, 170, 202));
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: mask-position, -webkit-mask-position;
+  transform: translateZ(0);
+  filter: drop-shadow(0 0 3px rgba(150, 172, 214, 0.55));
+  -webkit-mask-image: radial-gradient(
+    200px 200px at var(--mask-x, 50%) var(--mask-y, 50%),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 30%,
+    rgba(0, 0, 0, 0.2) 50%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  mask-image: radial-gradient(
+    200px 200px at var(--mask-x, 50%) var(--mask-y, 50%),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 30%,
+    rgba(0, 0, 0, 0.2) 50%,
+    rgba(0, 0, 0, 0) 70%
+  );
+}
+
+.lap-bezel {
+  position: relative;
+  border-radius: 2.05cqw 2.05cqw 0 0;
+  padding: 0.95cqw;
+  background: #060608;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    inset 0 0 2cqw rgba(0, 0, 0, 0.6);
+}
+
+.lap-bezel::before {
+  content: "";
+  position: absolute;
+  top: 0.34cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0.34cqw;
+  height: 0.34cqw;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #23343d, #050506 70%);
+  box-shadow: 0 0 0 0.06cqw rgba(255, 255, 255, 0.04);
+}
+
+.lap-display {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 1cqw 1cqw 0 0;
+  overflow: hidden;
+  background: #05070c;
+  container-type: size;
+
+  box-shadow: inset 0 0 4cqw rgba(0, 0, 0, 0.3);
+
+  mask-image: linear-gradient(#000, #000);
+  -webkit-mask-image: linear-gradient(#000, #000);
+}
+
+.lap-wall {
+  position: absolute;
+
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  object-fit: cover;
+  object-position: center 42%;
+  background:
+    radial-gradient(120% 90% at 50% 0%, #1d2740 0%, rgba(29, 39, 64, 0) 60%),
+    linear-gradient(180deg, #0d1018 0%, #05070c 100%);
+}
+
+.lap-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    130% 100% at 50% 38%,
+    transparent 42%,
+    rgba(0, 0, 0, 0.32) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lap-lid-rim-shade,
+.lap-bezel-shade,
+.lap-screen-shade,
+.lap-base-shade,
+.lap-hinge-shade {
+  position: absolute;
+
+  background: #090a0b;
+  pointer-events: none;
+  opacity: var(--lap-shade, 0);
+  will-change: opacity;
+}
+
+.lap-lid-rim-shade {
+  inset: -2cqw;
+}
+
+.lap-bezel-shade {
+  inset: -1cqw;
+}
+
+.lap-screen-shade {
+  inset: 0;
+  z-index: 4;
+}
+.lap-base-shade {
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+}
+.lap-hinge-shade {
+  inset: 0;
+  z-index: 3;
+}
+
+.lap-menubar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.9cqh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2.2cqh;
+
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(20px) saturate(1.25);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1.55cqh;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  z-index: 3;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+}
+
+.lap-menubar-left,
+.lap-menubar-right {
+  display: flex;
+  align-items: center;
+  gap: 1.9cqh;
+  min-width: 0;
+}
+
+.lap-menubar-logo {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.95;
+}
+.lap-menubar-app {
+  font-weight: 700;
+}
+.lap-menubar-item {
+  opacity: 0.82;
+  font-weight: 450;
+}
+.lap-menubar-glyph {
+  width: 1.9cqh;
+  height: 1.9cqh;
+  opacity: 0.9;
+}
+.lap-menubar-clock {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  opacity: 0.94;
+}
+
+.lap-appwrap {
+  position: absolute;
+
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+
+  z-index: 5;
+}
+
+.lap-app {
+
+  position: relative;
+
+}
+
+.lap-app-scale {
+
+  transform-origin: top left;
+}
+
+.lap-hinge {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 0.5cqw;
+  margin-top: -0.05cqw;
+  background: linear-gradient(180deg, #191a1c 0%, #0a0b0c 100%);
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.lap-base {
+  position: relative;
+  z-index: 1;
+
+  width: 138%;
+  left: -19%;
+  height: 3cqw;
+  margin-top: -0.05cqw;
+
+  border-radius: 0 0 2.6cqw 2.6cqw;
+  background: linear-gradient(
+    180deg,
+    #8d9196 0%,
+    #5d6166 15%,
+    #3a3c40 48%,
+    #202224 100%
+  );
+  box-shadow:
+
+    inset 0 2px 0 rgba(255, 255, 255, 0.64),
+
+    inset 22px 0 28px -14px rgba(255, 255, 255, 0.32),
+    inset -22px 0 28px -14px rgba(255, 255, 255, 0.32),
+
+    inset 0 -10px 15px -3px rgba(0, 0, 0, 0.86),
+
+    0 54px 70px -30px rgba(0, 0, 0, 0.84),
+    0 22px 40px -18px rgba(0, 0, 0, 0.62);
+}
+
+.lap-base::after {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 0;
+  height: 46%;
+  border-radius: 0 0 2.3cqw 2.3cqw;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.44) 100%);
+  box-shadow: inset 0 -1.5px 0 rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+}
+
+.lap-base::before {
+  content: "";
+  position: absolute;
+  inset: 0 4% auto 4%;
+  height: 70%;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 70% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.03) 55%,
+    rgba(255, 255, 255, 0) 80%
+  );
+  pointer-events: none;
+}
+
+.lap-base-notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14%;
+  height: 44%;
+  background: linear-gradient(180deg, #101113 0%, #2a2c2f 100%);
+  border-radius: 0 0 0.9cqw 0.9cqw;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.lap-app .hero-demo-callout,
+.lap-app .ev-frame-shadow,
+
+.lap-app .ev-frame-glow,
+
+.lap-app .ev-frame-shine-inner {
+  display: none !important;
+}
+
+.lap-app .ev-frame-stage {
+  --ev-frame-scale: 1;
+  transform: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.lap-app .ev-frame-fade-wrap,
+.lap-app .ev-frame-fade-surface,
+.lap-app .ev-frame-shell,
+.lap-app .ev-frame {
+  transform: none !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+.lap-app .ev-frame {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 30px 70px -20px rgba(0, 0, 0, 0.7) !important;
+}

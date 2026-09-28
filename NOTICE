@@ -1,0 +1,27 @@
+Evora web
+Copyright 2026 Evora
+
+This product includes software developed by Evora.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License. You may obtain a copy of
+the License in the LICENSE file distributed with this work, or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+TRADEMARKS
+"Evora" and the Evora logo are trademarks of Evora. Section 6 of the License
+does not grant permission to use them. The brand assets in public/ (including
+evora.png, evora-blue.png, evora-white.png, evorion-mark.png,
+evorion-banner.png and favicon.svg) are provided so the site builds and runs,
+not as a licence to use the marks they depict. Replace them in any derived
+work.
+
+THIRD-PARTY CONTENT
+Fonts in public/fonts are distributed under the SIL Open Font License by their
+respective authors and are not covered by the Apache License above:
+  - Inter        (c) The Inter Project Authors
+  - Geist        (c) Vercel, Inc.
+
+Text and code samples under src/app/docs and public/openapi describe the Evora
+Developer API and are provided for reference.

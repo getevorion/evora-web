@@ -1,0 +1,193 @@
+# Evora Developer API
+
+> Manage applications, licenses, end-users and subscriptions programmatically.
+
+Server-to-server REST API for building customer panels, Discord bots and
+storefront integrations on top of Evora authentication and licensing.
+
+- Base URL: `https://api.evora.cx/api/developer-api`
+- Auth: `Authorization: Bearer ag_sk_...` (server-side only — never ship a key to a browser)
+- Machine-readable spec: https://evora.cx/openapi/developer-api.yaml (also .json)
+- Human documentation: https://evora.cx/docs
+
+## Things that are easy to get wrong
+
+- License duration is `duration` x `expiry` seconds. `expiry: 86400` means days.
+  Unknown fields are ignored, so a wrong field name silently yields a 1-day key.
+- `POST /apps/{appId}/licenses/bulk` performs actions on existing keys. It does NOT
+  create them; use `amount` on `POST /apps/{appId}/licenses` for that.
+- Variables are addressed by `var_key`, not by an id.
+- `subscription.active` is false when expired OR paused. Prefer it over comparing
+  `expiresAt` yourself.
+- Authenticating a customer returns no session. You mint your own.
+- To authenticate a customer on a license-only app, use
+  `POST /apps/{appId}/licenses/authenticate`. Never use `GET /licenses?search=`,
+  which is a substring match and lets callers probe partial keys.
+- Password reset: Evora issues and verifies a token; YOU deliver it. No email is
+  sent from Evora.
+- Errors carry a stable `code` field. Branch on `code`, not on `error` text.
+
+## Endpoints
+
+### Quota
+
+- `GET /quota` — Plan quota and current usage
+
+### Applications
+
+- `GET /apps` — List applications
+- `POST /apps` — Create an application
+- `GET /apps/{appId}` — Get an application
+- `PUT /apps/{appId}` — Update an application
+- `DELETE /apps/{appId}` — Delete an application
+
+### Statistics
+
+- `GET /apps/{appId}/stats` — Application statistics
+- `GET /apps/{appId}/stats/overview` — Extended overview
+- `GET /apps/{appId}/stats/logins` — Login activity by day
+- `GET /apps/{appId}/stats/users` — User growth over time
+- `GET /apps/{appId}/stats/licenses` — License status breakdown
+- `GET /apps/{appId}/stats/sessions` — Session trends
+
+### Licenses
+
+- `GET /apps/{appId}/licenses` — List licenses
+- `POST /apps/{appId}/licenses` — Generate licenses
+- `GET /apps/{appId}/licenses/{licenseId}` — Get a license
+- `PUT /apps/{appId}/licenses/{licenseId}` — Update a license
+- `DELETE /apps/{appId}/licenses/{licenseId}` — Delete a license
+- `POST /apps/{appId}/licenses/{licenseId}/ban` — Ban a license
+- `POST /apps/{appId}/licenses/{licenseId}/unban` — Unban a license
+- `POST /apps/{appId}/licenses/{licenseId}/reset-hwid` — Reset a license HWID
+- `POST /apps/{appId}/licenses/{licenseId}/pause` — Freeze a license
+- `POST /apps/{appId}/licenses/{licenseId}/unpause` — Resume a frozen license
+- `POST /apps/{appId}/licenses/{licenseId}/expiry` — Adjust license expiry by a signed delta
+- `POST /apps/{appId}/licenses/bulk` — Bulk license actions
+
+### Users
+
+- `GET /apps/{appId}/users/lookup` — Look up a customer by username
+- `GET /users` — List customers
+- `POST /users` — Create a customer
+- `GET /users/{userId}` — Get a customer
+- `PUT /users/{userId}` — Update a customer
+- `DELETE /users/{userId}` — Delete a customer
+- `POST /users/{userId}/password-reset` — Mint a password-reset token
+- `POST /password-reset/fulfil` — Consume a reset token and set the new password
+- `POST /users/{userId}/ban` — Ban a customer
+- `POST /users/{userId}/unban` — Unban a customer
+- `POST /users/{userId}/reset-hwid` — Reset a customer's HWID
+- `GET /users/{userId}/2fa` — Read a customer's two-factor state
+- `DELETE /users/{userId}/2fa` — Reset a customer's two-factor authentication
+- `POST /users/{userId}/reset-device` — Reset a customer's device binding
+- `POST /users/{userId}/issue-session-token` — Mint a one-time SDK login token (panel SSO)
+- `POST /users/{userId}/redeem` — Redeem a license key on a customer's behalf
+- `POST /users/bulk` — Bulk customer actions
+
+### Authentication
+
+- `POST /apps/{appId}/licenses/authenticate` — Authenticate a customer by license key
+- `POST /apps/{appId}/users/authenticate` — Authenticate a customer by username and password
+
+### Subscriptions
+
+- `GET /users/{userId}/subscriptions` — List a customer's subscriptions
+- `POST /users/{userId}/subscriptions` — Grant a subscription directly
+- `DELETE /users/{userId}/subscriptions/{appId}` — Remove a subscription
+- `POST /users/{userId}/subscriptions/{appId}/pause` — Freeze a subscription
+- `POST /users/{userId}/subscriptions/{appId}/unpause` — Resume a frozen subscription
+- `POST /users/{userId}/subscriptions/extend` — Extend a subscription by days
+
+### Subscription tiers
+
+- `GET /apps/{appId}/subscriptions` — List tiers
+- `POST /apps/{appId}/subscriptions` — Create a tier
+- `PUT /apps/{appId}/subscriptions/{subscriptionId}` — Update a tier
+- `DELETE /apps/{appId}/subscriptions/{subscriptionId}` — Delete a tier
+
+### Variables
+
+- `GET /apps/{appId}/variables` — List app variables
+- `POST /apps/{appId}/variables` — Create or update a variable
+- `DELETE /apps/{appId}/variables` — Delete all app variables
+- `GET /apps/{appId}/variables/{key}` — Get a variable
+- `PUT /apps/{appId}/variables/{key}` — Update a variable
+- `DELETE /apps/{appId}/variables/{key}` — Delete a variable
+- `GET /apps/{appId}/user-variables` — List every user variable in the application
+- `GET /apps/{appId}/users/{userId}/variables` — List one customer's variables
+- `POST /apps/{appId}/users/{userId}/variables` — Set a customer variable
+- `DELETE /apps/{appId}/users/{userId}/variables` — Delete all of a customer's variables
+- `DELETE /apps/{appId}/users/{userId}/variables/{varKey}` — Delete a customer variable
+
+### Webhooks
+
+- `GET /apps/{appId}/webhooks` — List webhooks
+- `POST /apps/{appId}/webhooks` — Create a webhook
+- `GET /apps/{appId}/webhooks/{webhookId}` — Get a webhook
+- `PUT /apps/{appId}/webhooks/{webhookId}` — Update a webhook
+- `DELETE /apps/{appId}/webhooks/{webhookId}` — Delete a webhook
+- `POST /apps/{appId}/webhooks/{webhookId}/test` — Fire a test delivery
+- `GET /apps/{appId}/events` — Read the event stream (catch-up)
+
+### Access control
+
+- `GET /apps/{appId}/blacklist` — List blacklist entries
+- `POST /apps/{appId}/blacklist` — Add a blacklist entry
+- `DELETE /apps/{appId}/blacklist/{entryId}` — Remove a blacklist entry
+- `GET /apps/{appId}/whitelist` — List whitelist entries
+- `POST /apps/{appId}/whitelist` — Add a whitelist entry
+- `DELETE /apps/{appId}/whitelist/{entryId}` — Remove a whitelist entry
+
+### Sessions
+
+- `GET /apps/{appId}/sessions` — List live sessions
+- `DELETE /apps/{appId}/sessions/{sessionId}` — Kill a session
+- `POST /apps/{appId}/sessions/kill-all` — Kill every live session
+
+### Logs
+
+- `GET /apps/{appId}/logs` — List logs
+- `GET /apps/{appId}/logs/stats` — Log statistics
+
+### Sellers
+
+- `GET /apps/{appId}/sellers` — List sellers
+- `POST /apps/{appId}/sellers` — Create a seller
+- `GET /apps/{appId}/sellers/{sellerId}` — Get a seller
+- `PUT /apps/{appId}/sellers/{sellerId}` — Update a seller
+- `DELETE /apps/{appId}/sellers/{sellerId}` — Delete a seller
+- `POST /apps/{appId}/sellers/{sellerId}/balance` — Add seller balance
+
+### Clients
+
+- `GET /clients` — List clients
+- `POST /clients` — Create a client
+- `PUT /clients/{clientId}` — Update a client
+- `DELETE /clients/{clientId}` — Delete a client
+- `GET /clients/{clientId}/apps` — List a client's application access
+- `POST /clients/{clientId}/apps` — Grant application access
+- `DELETE /clients/{clientId}/apps/{appId}` — Revoke application access
+
+### Entitlements
+
+- `GET /apps/{appId}/entitlements` — List entitlements
+- `POST /apps/{appId}/entitlements` — Create an entitlement
+- `PUT /apps/{appId}/entitlements/{entitlementId}` — Update an entitlement
+- `DELETE /apps/{appId}/entitlements/{entitlementId}` — Delete an entitlement
+- `GET /apps/{appId}/subscriptions/{subscriptionId}/entitlements` — List entitlements attached to a tier
+- `POST /apps/{appId}/subscriptions/{subscriptionId}/entitlements` — Attach an entitlement to a tier
+- `GET /apps/{appId}/users/{userId}/entitlements` — Resolve a customer's entitlements
+
+### Geo
+
+- `GET /apps/{appId}/geo-rules` — List geo rules
+- `POST /apps/{appId}/geo-rules` — Add a geo rule
+- `DELETE /apps/{appId}/geo-rules/{ruleId}` — Remove a geo rule
+- `PUT /apps/{appId}/geo-enabled` — Enable or disable geo restrictions
+
+### Floating licenses
+
+- `GET /apps/{appId}/floating/leases` — List active leases
+- `DELETE /apps/{appId}/floating/leases/{leaseId}` — Revoke a lease
+- `GET /apps/{appId}/users/{userId}/floating/seats` — Seat usage for a customer

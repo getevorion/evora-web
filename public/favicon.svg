@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <clipPath id="hex">
+      <polygon points="32,2 55,15 55,49 32,62 9,49 9,15" />
+    </clipPath>
+    <filter id="logo-blue">
+      <feColorMatrix type="hueRotate" values="190" />
+      <feComponentTransfer>
+        <feFuncR type="gamma" amplitude="1" exponent="0.95" offset="0" />
+        <feFuncG type="gamma" amplitude="1.15" exponent="1" offset="0" />
+        <feFuncB type="gamma" amplitude="1.4" exponent="1" offset="0" />
+      </feComponentTransfer>
+    </filter>
+  </defs>
+  <image href="/evora.png" x="0" y="0" width="64" height="64" preserveAspectRatio="xMidYMid slice" clip-path="url(#hex)" filter="url(#logo-blue)"/>
+  <polygon points="32,2 55,15 55,49 32,62 9,49 9,15" fill="none" stroke="#1e3fff" stroke-width="3"/>
+</svg>
